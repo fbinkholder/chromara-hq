@@ -4,346 +4,157 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 
 type Contact = {
+  id: string
   name: string
   title: string
   company: string
   email: string
-  linkedin_url: string
-  phone?: string
+  linkedin_url?: string
 }
 
 export default function ContactFinderPage() {
-  const [searchType, setSearchType] = useState<'company' | 'title'>('company')
   const [searchQuery, setSearchQuery] = useState('')
-  const [titleQuery, setTitleQuery] = useState('VP')
   const [searching, setSearching] = useState(false)
   const [results, setResults] = useState<Contact[]>([])
-  const [selectedContacts, setSelectedContacts] = useState<Set<number>>(new Set())
-  const [adding, setAdding] = useState(false)
-
+  const [saving, setSaving] = useState<string | null>(null)
   const supabase = createClient()
 
-  const searchContacts = async () => {
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return
+
     setSearching(true)
     setResults([])
 
     try {
-      // In production, this would call Apollo.io API
-      // For now, simulate with demo data
-      
-      const demoResults: Contact[] = [
-        {
-          name: 'Sarah Johnson',
-          title: 'VP of Innovation',
-          company: searchQuery || 'L\'Oréal',
-          email: 'sarah.johnson@example.com',
-          linkedin_url: 'https://linkedin.com/in/sarahjohnson',
-        },
-        {
-          name: 'Michael Chen',
-          title: 'Chief Innovation Officer',
-          company: searchQuery || 'Estée Lauder',
-          email: 'michael.chen@example.com',
-          linkedin_url: 'https://linkedin.com/in/michaelchen',
-        },
-        {
-          name: 'Emily Rodriguez',
-          title: 'Director of Product Innovation',
-          company: searchQuery || 'Shiseido',
-          email: 'emily.rodriguez@example.com',
-          linkedin_url: 'https://linkedin.com/in/emilyrodriguez',
-        },
-      ]
+      const response = await fetch('/api/apollo/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: searchQuery })
+      })
 
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Search failed')
+      }
+
+      setResults(data.contacts || [])
       
-      setResults(demoResults)
-    } catch (error) {
-      console.error('Error searching contacts:', error)
-      alert('Failed to search contacts')
+      if (data.contacts.length === 0) {
+        alert('No contacts found. Try a different search query.')
+      }
+    } catch (error: any) {
+      console.error('Search error:', error)
+      alert('Search failed: ' + error.message)
     } finally {
       setSearching(false)
     }
   }
 
-  const toggleContact = (index: number) => {
-    const newSelected = new Set(selectedContacts)
-    if (newSelected.has(index)) {
-      newSelected.delete(index)
-    } else {
-      newSelected.add(index)
-    }
-    setSelectedContacts(newSelected)
-  }
-
-  const selectAll = () => {
-    if (selectedContacts.size === results.length) {
-      setSelectedContacts(new Set())
-    } else {
-      setSelectedContacts(new Set(results.map((_, i) => i)))
-    }
-  }
-
-  const addToPartnershipTracker = async () => {
-    if (selectedContacts.size === 0) {
-      alert('Please select at least one contact')
-      return
-    }
-
-    setAdding(true)
+  const handleAddContact = async (contact: Contact) => {
+    setSaving(contact.id)
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
       
-      const contactsToAdd = Array.from(selectedContacts).map(index => {
-        const contact = results[index]
-        return {
-          user_id: user?.id,
+      if (!user) {
+        alert('You must be logged in to save contacts')
+        return
+      }
+
+      const { error } = await supabase
+        .from('outreach_contacts')
+        .insert({
+          user_id: user.id,
           company: contact.company,
           contact_name: contact.name,
           title: contact.title,
           email: contact.email,
           linkedin_url: contact.linkedin_url,
+          segment: 'beauty brands',
           priority: 'medium',
-          segment: 'Fortune 500', // Can be customized
-          status: 'not_contacted',
-          response_received: false,
-        }
-      })
-
-      const { error } = await supabase
-        .from('outreach_contacts')
-        .insert(contactsToAdd)
+          status: 'not_contacted'
+        })
 
       if (error) throw error
 
-      alert(`Successfully added ${selectedContacts.size} contact(s) to Partnership Tracker!`)
-      setSelectedContacts(new Set())
-      
-      // Optionally redirect to partnerships page
-      // window.location.href = '/dashboard/partnerships'
-    } catch (error) {
-      console.error('Error adding contacts:', error)
-      alert('Failed to add contacts to tracker')
+      alert('✅ Added to Partnership Tracker!')
+      setResults(results.filter(r => r.id !== contact.id))
+    } catch (error: any) {
+      console.error('Save error:', error)
+      alert('Failed to save: ' + error.message)
     } finally {
-      setAdding(false)
+      setSaving(null)
     }
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Contact Finder 🔍</h1>
-          <p className="text-white/60 mt-1">Search Apollo.io and add contacts to your tracker</p>
-        </div>
-        <a
-          href="/dashboard/agents"
-          className="px-6 py-3 rounded-full border border-white/20 text-white hover:bg-white/10 transition-all"
-        >
-          ← Back to Agent
-        </a>
+      <div className="text-center">
+        <h1 className="text-4xl font-bold text-white mb-3">🔍 Contact Finder</h1>
+        <p className="text-white/60 text-lg">Search Apollo.io for beauty industry contacts</p>
       </div>
 
-      {/* Search */}
       <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Search Parameters</h3>
-        
-        <div className="space-y-4">
-          {/* Search Type */}
-          <div>
-            <label className="block text-sm font-semibold text-white mb-2">Search By</label>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setSearchType('company')}
-                className={`px-4 py-2 rounded-lg transition-all ${
-                  searchType === 'company'
-                    ? 'bg-gradient-to-r from-chromara-purple to-chromara-pink text-white'
-                    : 'bg-white/10 text-white/60 hover:bg-white/20'
-                }`}
-              >
-                Company Name
-              </button>
-              <button
-                onClick={() => setSearchType('title')}
-                className={`px-4 py-2 rounded-lg transition-all ${
-                  searchType === 'title'
-                    ? 'bg-gradient-to-r from-chromara-purple to-chromara-pink text-white'
-                    : 'bg-white/10 text-white/60 hover:bg-white/20'
-                }`}
-              >
-                Job Title
-              </button>
-            </div>
-          </div>
-
-          {/* Search Inputs */}
-          {searchType === 'company' ? (
-            <div>
-              <label className="block text-sm font-semibold text-white mb-2">Company Name</label>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="e.g., L'Oréal, Estée Lauder, Shiseido"
-                className="glass-input w-full"
-              />
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-white mb-2">Job Title Keywords</label>
-                <input
-                  type="text"
-                  value={titleQuery}
-                  onChange={(e) => setTitleQuery(e.target.value)}
-                  placeholder="e.g., VP, Chief Innovation Officer, Director"
-                  className="glass-input w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-white mb-2">Industry (Optional)</label>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="e.g., Beauty, Cosmetics"
-                  className="glass-input w-full"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Search Button */}
+        <div className="flex gap-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            placeholder="e.g., VP Innovation beauty brands"
+            className="flex-1 px-4 py-3 bg-black/30 border border-white/20 rounded-lg text-white placeholder:text-white/40"
+          />
           <button
-            onClick={searchContacts}
-            disabled={searching || (!searchQuery && searchType === 'company')}
-            className="glass-button w-full md:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleSearch}
+            disabled={searching || !searchQuery.trim()}
+            className="glass-button px-8 py-3 disabled:opacity-50"
           >
-            {searching ? '🔍 Searching Apollo.io...' : '🔍 Search Contacts'}
+            {searching ? '⏳ Searching...' : '🔍 Search'}
           </button>
         </div>
       </div>
 
-      {/* Results */}
       {results.length > 0 && (
-        <>
-          <div className="flex items-center justify-between">
-            <div className="text-white/60 text-sm">
-              Found {results.length} contacts • {selectedContacts.size} selected
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={selectAll}
-                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm transition-all"
-              >
-                {selectedContacts.size === results.length ? 'Deselect All' : 'Select All'}
-              </button>
-              <button
-                onClick={addToPartnershipTracker}
-                disabled={selectedContacts.size === 0 || adding}
-                className="glass-button disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {adding ? 'Adding...' : `➕ Add ${selectedContacts.size || ''} to Tracker`}
-              </button>
-            </div>
-          </div>
+        <div className="glass-card p-6">
+          <h2 className="text-xl font-bold text-white mb-4">
+            Found {results.length} contacts
+          </h2>
 
-          <div className="space-y-3">
-            {results.map((contact, index) => (
-              <ContactCard
-                key={index}
-                contact={contact}
-                selected={selectedContacts.has(index)}
-                onToggle={() => toggleContact(index)}
-              />
+          <div className="space-y-4">
+            {results.map((contact) => (
+              <div key={contact.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-white">{contact.name}</h3>
+                    <p className="text-white/80">{contact.title}</p>
+                    <p className="text-white/60">{contact.company}</p>
+                    {contact.email && (
+                      <p className="text-sm text-chromara-purple mt-2">📧 {contact.email}</p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => handleAddContact(contact)}
+                    disabled={saving === contact.id}
+                    className="glass-button px-6 py-2 text-sm disabled:opacity-50"
+                  >
+                    {saving === contact.id ? '⏳ Adding...' : '➕ Add'}
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
-        </>
+        </div>
       )}
 
-      {/* Empty State */}
       {!searching && results.length === 0 && (
         <div className="glass-card p-12 text-center">
           <div className="text-6xl mb-4">🔍</div>
-          <h3 className="text-xl font-semibold text-white mb-2">No results yet</h3>
-          <p className="text-white/60">Search for contacts using Apollo.io</p>
+          <h3 className="text-xl font-semibold text-white mb-2">Ready to find contacts!</h3>
+          <p className="text-white/60">Enter a search query above</p>
         </div>
       )}
-
-      {/* Searching State */}
-      {searching && (
-        <div className="glass-card p-12 text-center">
-          <div className="text-6xl mb-4 animate-pulse">🔍</div>
-          <h3 className="text-xl font-semibold text-white mb-2">Searching Apollo.io...</h3>
-          <p className="text-white/60">Finding contacts matching your criteria</p>
-        </div>
-      )}
-
-      {/* Info */}
-      <div className="glass-card p-4 bg-blue-500/10 border border-blue-500/20">
-        <p className="text-sm text-white/80">
-          💡 <strong>Demo Mode:</strong> This is showing demo data. In production, this will search your Apollo.io account using the API key you provided. Contacts will be automatically enriched with email, LinkedIn, and title information.
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function ContactCard({ contact, selected, onToggle }: {
-  contact: Contact
-  selected: boolean
-  onToggle: () => void
-}) {
-  return (
-    <div 
-      onClick={onToggle}
-      className={`glass-card p-5 cursor-pointer transition-all ${
-        selected ? 'bg-chromara-purple/20 border-2 border-chromara-purple' : 'hover:bg-white/15'
-      }`}
-    >
-      <div className="flex items-start gap-4">
-        {/* Checkbox */}
-        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-          selected 
-            ? 'bg-gradient-to-r from-chromara-purple to-chromara-pink border-transparent' 
-            : 'border-white/40'
-        }`}>
-          {selected && <span className="text-white text-sm">✓</span>}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1">
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <h3 className="text-lg font-semibold text-white">{contact.name}</h3>
-              <p className="text-sm text-white/80">{contact.title}</p>
-              <p className="text-sm text-white/60">{contact.company}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3 text-sm">
-            <a
-              href={`mailto:${contact.email}`}
-              onClick={(e) => e.stopPropagation()}
-              className="text-chromara-pink hover:underline"
-            >
-              📧 {contact.email}
-            </a>
-            <a
-              href={contact.linkedin_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="text-blue-400 hover:underline"
-            >
-              🔗 LinkedIn
-            </a>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
