@@ -57,6 +57,7 @@ const navigation: NavItem[] = [
     href: '/dashboard/competitive', 
     icon: Target,
     subPages: [
+      { name: 'Agent Intel (Live)', href: '/dashboard/competitive-intel' },
       { name: 'Competitor Matrix', href: '/dashboard/competitive/matrix' },
       { name: 'Market Research', href: '/dashboard/competitive/research' },
       { name: 'Pricing Analysis', href: '/dashboard/competitive/pricing' },

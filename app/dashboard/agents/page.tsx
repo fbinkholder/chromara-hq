@@ -1,9 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { GlobalSearchModal } from './components/GlobalSearchModal'
 import { CalendarViewModal } from './components/CalendarViewModal'
+
+const ACTIVITY_STORAGE_KEY = 'chromara-mission-activity'
+const SCHEDULE_STORAGE_KEY = 'chromara-mission-schedule'
+
+type ActivityType = 'sent' | 'opened' | 'response' | 'scheduled' | 'meeting'
+type ActivityItem = { id: string; icon: string; text: string; time: string; type: ActivityType; source: 'real' | 'custom' }
+type ScheduleItemData = { id: string; date: string; title: string; contacts: number }
 
 export default function OutreachAgentPage() {
   const [agentActive, setAgentActive] = useState(false)
@@ -19,11 +26,219 @@ export default function OutreachAgentPage() {
     responses: 0
   })
   const [loadingStats, setLoadingStats] = useState(true)
+  const [runningAgentsCount, setRunningAgentsCount] = useState(0)
+  const [stoppingAgents, setStoppingAgents] = useState(false)
   const supabase = createClient()
+
+  // Mission Control: real + editable custom items
+  const [realActivity, setRealActivity] = useState<ActivityItem[]>([])
+  const [customActivity, setCustomActivity] = useState<ActivityItem[]>([])
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItemData[]>([])
+  const [loadingActivity, setLoadingActivity] = useState(true)
   
   useEffect(() => {
     loadStats()
   }, [])
+
+  const loadRunningAgents = useCallback(async () => {
+    try {
+      const { count, error } = await supabase
+        .from('agent_activity')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'running')
+      if (!error) setRunningAgentsCount(count ?? 0)
+    } catch (_) {}
+  }, [supabase])
+
+  useEffect(() => {
+    loadRunningAgents()
+  }, [loadRunningAgents])
+
+  const stopAllAgents = async () => {
+    setStoppingAgents(true)
+    try {
+      const res = await fetch('/api/agents/stop', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to stop')
+      setRunningAgentsCount(0)
+      if (data.stopped > 0) alert(`Stopped ${data.stopped} agent(s).`)
+    } catch (e) {
+      alert(String(e))
+    } finally {
+      setStoppingAgents(false)
+    }
+  }
+
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(ACTIVITY_STORAGE_KEY) : null
+    if (saved) {
+      try {
+        setCustomActivity(JSON.parse(saved))
+      } catch (_) {}
+    }
+  }, [])
+
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(SCHEDULE_STORAGE_KEY) : null
+    if (saved) {
+      try {
+        setScheduleItems(JSON.parse(saved))
+      } catch (_) {}
+    }
+  }, [])
+
+  const loadMissionControl = useCallback(async () => {
+    setLoadingActivity(true)
+    try {
+      const items: ActivityItem[] = []
+      const now = Date.now()
+
+      const { data: sentRows } = await supabase
+        .from('sent_emails')
+        .select('id, recipient_email, subject, sent_at, opened, contact_id')
+        .order('sent_at', { ascending: false })
+        .limit(15)
+
+      if (sentRows?.length) {
+        const contactIds = [...new Set((sentRows.map(r => r.contact_id).filter(Boolean) as string[]))]
+        let contactMap: Record<string, { contact_name?: string; company?: string }> = {}
+        if (contactIds.length > 0) {
+          const { data: contacts } = await supabase
+            .from('outreach_contacts')
+            .select('id, contact_name, company')
+            .in('id', contactIds)
+          contacts?.forEach(c => { contactMap[c.id] = { contact_name: c.contact_name, company: c.company } })
+        }
+        for (const row of sentRows) {
+          const name = row.contact_id && contactMap[row.contact_id]?.contact_name
+          const company = row.contact_id && contactMap[row.contact_id]?.company
+          const label = name ? `${name}${company ? ` (${company})` : ''}` : row.recipient_email
+          const timeAgo = row.sent_at ? formatTimeAgo(new Date(row.sent_at).getTime(), now) : 'recently'
+          items.push({
+            id: `sent-${row.id}`,
+            icon: '📧',
+            text: `Email sent to ${label}`,
+            time: timeAgo,
+            type: 'sent',
+            source: 'real',
+          })
+          if (row.opened) {
+            items.push({
+              id: `opened-${row.id}`,
+              icon: '👁️',
+              text: `${label} opened your email`,
+              time: timeAgo,
+              type: 'opened',
+              source: 'real',
+            })
+          }
+        }
+      }
+
+      const { data: responded } = await supabase
+        .from('outreach_contacts')
+        .select('id, contact_name, company, updated_at')
+        .eq('response_received', true)
+        .order('updated_at', { ascending: false })
+        .limit(10)
+
+      responded?.forEach(row => {
+        const label = row.contact_name ? `${row.contact_name}${row.company ? ` (${row.company})` : ''}` : 'Contact'
+        const timeAgo = row.updated_at ? formatTimeAgo(new Date(row.updated_at).getTime(), now) : 'recently'
+        items.push({
+          id: `response-${row.id}`,
+          icon: '💬',
+          text: `Response received from ${label}`,
+          time: timeAgo,
+          type: 'response',
+          source: 'real',
+        })
+      })
+
+      setRealActivity(items)
+    } catch (e) {
+      console.error('Error loading mission control activity:', e)
+    } finally {
+      setLoadingActivity(false)
+    }
+  }, [supabase])
+
+  useEffect(() => {
+    loadMissionControl()
+  }, [loadMissionControl])
+
+  const mergedActivity = [...realActivity, ...customActivity].slice(0, 25)
+
+  const addCustomActivity = () => {
+    const text = prompt('Activity text (e.g. "Email sent to Jane at Glossier")')
+    if (!text?.trim()) return
+    const time = prompt('When? (e.g. "2 minutes ago", "1 hour ago")', 'Just now')
+    const item: ActivityItem = {
+      id: `custom-${Date.now()}`,
+      icon: '📌',
+      text: text.trim(),
+      time: (time || 'Just now').trim(),
+      type: 'sent',
+      source: 'custom',
+    }
+    const next = [item, ...customActivity]
+    setCustomActivity(next)
+    if (typeof window !== 'undefined') localStorage.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify(next))
+  }
+
+  const removeCustomActivity = (id: string) => {
+    const next = customActivity.filter(a => a.id !== id)
+    setCustomActivity(next)
+    if (typeof window !== 'undefined') localStorage.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify(next))
+  }
+
+  const saveScheduleItems = (next: ScheduleItemData[]) => {
+    setScheduleItems(next)
+    if (typeof window !== 'undefined') localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(next))
+  }
+
+  const addScheduleItem = () => {
+    const title = prompt('Title (e.g. Follow-up to L\'Oréal team)')
+    if (!title?.trim()) return
+    const date = prompt('Date/time (e.g. Today, 3:00 PM)', 'Today')
+    const contactsStr = prompt('Number of contacts', '1')
+    const contacts = Math.max(0, parseInt(contactsStr || '1', 10) || 1)
+    const item: ScheduleItemData = {
+      id: `sched-${Date.now()}`,
+      date: (date || 'Today').trim(),
+      title: title.trim(),
+      contacts,
+    }
+    saveScheduleItems([...scheduleItems, item])
+  }
+
+  const editScheduleItem = (id: string) => {
+    const item = scheduleItems.find(s => s.id === id)
+    if (!item) return
+    const title = prompt('Title', item.title)
+    if (title === null) return
+    const date = prompt('Date/time', item.date)
+    if (date === null) return
+    const contactsStr = prompt('Number of contacts', String(item.contacts))
+    const contacts = contactsStr !== null ? (Math.max(0, parseInt(contactsStr, 10) || 0)) : item.contacts
+    const next = scheduleItems.map(s =>
+      s.id === id ? { ...s, title: title ?? s.title, date: date ?? s.date, contacts } : s
+    )
+    saveScheduleItems(next)
+  }
+
+  const removeScheduleItem = (id: string) => {
+    saveScheduleItems(scheduleItems.filter(s => s.id !== id))
+  }
+
+  function formatTimeAgo(ts: number, now: number): string {
+    const d = Math.floor((now - ts) / 1000)
+    if (d < 60) return 'Just now'
+    if (d < 3600) return `${Math.floor(d / 60)} minutes ago`
+    if (d < 86400) return `${Math.floor(d / 3600)} hours ago`
+    if (d < 604800) return `${Math.floor(d / 86400)} days ago`
+    return 'Earlier'
+  }
   
   const loadStats = async () => {
     try {
@@ -106,7 +321,14 @@ export default function OutreachAgentPage() {
       <div className="glass-card p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-white">🎛️ Mission Control</h2>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
+            <button
+              onClick={loadMissionControl}
+              disabled={loadingActivity}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white text-sm transition-all disabled:opacity-50"
+            >
+              {loadingActivity ? '⏳ Loading…' : '🔄 Refresh'}
+            </button>
             <button 
               onClick={() => setShowGlobalSearch(true)}
               className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white text-sm transition-all"
@@ -123,62 +345,83 @@ export default function OutreachAgentPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Live Activity Feed */}
+          {/* Live Activity Feed - real data + editable custom items */}
           <div>
-            <h3 className="text-sm font-semibold text-white mb-3">📊 Live Activity Feed</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white">📊 Live Activity Feed</h3>
+              <button
+                type="button"
+                onClick={addCustomActivity}
+                className="text-xs px-3 py-1.5 bg-chromara-purple/30 hover:bg-chromara-purple/50 text-white rounded-lg transition-all"
+              >
+                + Add activity
+              </button>
+            </div>
             <div className="space-y-2 max-h-[200px] overflow-y-auto">
-              <ActivityItem 
-                icon="📧" 
-                text="Email sent to Sarah Johnson (L'Oréal)" 
-                time="2 minutes ago"
-                type="sent"
-              />
-              <ActivityItem 
-                icon="👁️" 
-                text="Michael Chen opened your email" 
-                time="15 minutes ago"
-                type="opened"
-              />
-              <ActivityItem 
-                icon="💬" 
-                text="Response received from Emily Rodriguez" 
-                time="1 hour ago"
-                type="response"
-              />
-              <ActivityItem 
-                icon="🔄" 
-                text="Follow-up scheduled for 3 contacts" 
-                time="2 hours ago"
-                type="scheduled"
-              />
-              <ActivityItem 
-                icon="📅" 
-                text="Meeting booked with Sarah Johnson" 
-                time="3 hours ago"
-                type="meeting"
-              />
+              {loadingActivity && mergedActivity.length === 0 ? (
+                <p className="text-sm text-white/50 py-4">Loading activity…</p>
+              ) : mergedActivity.length === 0 ? (
+                <p className="text-sm text-white/50 py-4">No activity yet. Send emails or add one manually.</p>
+              ) : (
+                mergedActivity.map((item) => (
+                  <div key={item.id} className="relative group">
+                    <ActivityItem icon={item.icon} text={item.text} time={item.time} type={item.type} />
+                    {item.source === 'custom' && (
+                      <button
+                        type="button"
+                        onClick={() => removeCustomActivity(item.id)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-xs px-2 py-1 transition-opacity"
+                        title="Remove"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
-          {/* Upcoming Schedule */}
+          {/* Upcoming Schedule - fully editable */}
           <div>
-            <h3 className="text-sm font-semibold text-white mb-3">📅 Upcoming This Week</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white">📅 Upcoming This Week</h3>
+              <button
+                type="button"
+                onClick={addScheduleItem}
+                className="text-xs px-3 py-1.5 bg-chromara-purple/30 hover:bg-chromara-purple/50 text-white rounded-lg transition-all"
+              >
+                + Add item
+              </button>
+            </div>
             <div className="space-y-2">
-              <ScheduleItem 
-                date="Today, 3:00 PM"
-                title="Follow-up to L'Oréal team"
-                contacts={3}
-              />
-              <ScheduleItem 
-                date="Tomorrow, 9:00 AM"
-                title="Meeting with Estée Lauder"
-                contacts={1}
-              />
-              <ScheduleItem 
-                date="Friday, 2:00 PM"
-                title="Second follow-up sequence"
-                contacts={5}
-              />
+              {scheduleItems.length === 0 ? (
+                <p className="text-sm text-white/50 py-4">No upcoming items. Add one to get started.</p>
+              ) : (
+                scheduleItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-2 p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-all group">
+                    <ScheduleItem date={item.date} title={item.title} contacts={item.contacts} />
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => editScheduleItem(item.id)}
+                        className="text-xs px-2 py-1 text-white/80 hover:text-white rounded"
+                        title="Edit"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeScheduleItem(item.id)}
+                        className="text-xs px-2 py-1 text-red-400 hover:text-red-300 rounded"
+                        title="Remove"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -210,6 +453,42 @@ export default function OutreachAgentPage() {
 
       {/* Main Features */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <FeatureCard
+          icon="📱"
+          title="Social Media Manager"
+          description="Generate and schedule posts with Claude"
+          badge="Claude"
+          badgeColor="from-purple-500 to-pink-500"
+          comingSoon={false}
+          onClick={() => window.location.href = '/dashboard/agents/social-media'}
+        />
+        <FeatureCard
+          icon="🔍"
+          title="Market Intelligence"
+          description="Scrape SEO, competitors, trends, consumer insights"
+          badge="Firecrawl"
+          badgeColor="from-orange-500 to-amber-500"
+          comingSoon={false}
+          onClick={() => window.location.href = '/dashboard/agents/market-intel'}
+        />
+        <FeatureCard
+          icon="📄"
+          title="Patent Tracker"
+          description="Monitor USPTO filings for competitors"
+          badge="USPTO"
+          badgeColor="from-slate-500 to-slate-600"
+          comingSoon={false}
+          onClick={() => window.location.href = '/dashboard/agents/patent-tracker'}
+        />
+        <FeatureCard
+          icon="👥"
+          title="Contact Intelligence"
+          description="Find contacts by company domain"
+          badge="Firecrawl"
+          badgeColor="from-cyan-500 to-blue-500"
+          comingSoon={false}
+          onClick={() => window.location.href = '/dashboard/agents/contact-intel'}
+        />
         {/* Contact Finder */}
         <FeatureCard
           icon="🔍"
@@ -338,11 +617,19 @@ export default function OutreachAgentPage() {
       <div className="glass-card p-6 border-2 border-red-500/20">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-bold text-white mb-1">Emergency Stop</h3>
-            <p className="text-sm text-white/60">Immediately pause all agent activity</p>
+            <h3 className="text-lg font-bold text-white mb-1">Stop Agent Activity</h3>
+            <p className="text-sm text-white/60">
+              {runningAgentsCount > 0
+                ? `${runningAgentsCount} agent(s) running. Click to stop all.`
+                : 'Immediately stop all agents that are running.'}
+            </p>
           </div>
-          <button className="px-6 py-3 bg-red-500 hover:bg-red-600 rounded-full text-white font-semibold transition-all">
-            🛑 Stop All Activity
+          <button
+            onClick={stopAllAgents}
+            disabled={stoppingAgents || runningAgentsCount === 0}
+            className="px-6 py-3 bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-full text-white font-semibold transition-all"
+          >
+            {stoppingAgents ? 'Stopping…' : `🛑 Stop All Agents${runningAgentsCount > 0 ? ` (${runningAgentsCount})` : ''}`}
           </button>
         </div>
       </div>

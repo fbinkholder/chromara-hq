@@ -17,6 +17,11 @@ export default function HomeDashboard() {
     investors: '0'
   })
   const [editingStats, setEditingStats] = useState(false)
+  const [agentStats, setAgentStats] = useState({
+    insights: 0,
+    patents: 0,
+    postsQueued: 0
+  })
   
   const supabase = createClient()
 
@@ -28,9 +33,30 @@ export default function HomeDashboard() {
     if (savedStats) {
       setStats(JSON.parse(savedStats))
     } else {
-      // Load real counts on first load
       loadRealStats()
     }
+  }, [])
+
+  useEffect(() => {
+    const loadAgentStats = async () => {
+      try {
+        const sevenDaysAgo = new Date()
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+        const thirtyDaysAgo = new Date()
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        const [insightsRes, patentsRes, queuedRes] = await Promise.all([
+          supabase.from('market_intelligence').select('*', { count: 'exact', head: true }).gte('scraped_at', sevenDaysAgo.toISOString()),
+          supabase.from('patent_filings').select('*', { count: 'exact', head: true }).gte('filing_date', thirtyDaysAgo.toISOString().slice(0, 10)),
+          supabase.from('social_posts').select('*', { count: 'exact', head: true }).eq('status', 'queued'),
+        ])
+        setAgentStats({
+          insights: insightsRes.count ?? 0,
+          patents: patentsRes.count ?? 0,
+          postsQueued: queuedRes.count ?? 0
+        })
+      } catch (_) {}
+    }
+    loadAgentStats()
   }, [])
 
   const loadRealStats = async () => {
@@ -67,6 +93,22 @@ export default function HomeDashboard() {
     } catch (error) {
       console.error('Error loading stats:', error)
     }
+    try {
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const [insightsRes, patentsRes, queuedRes] = await Promise.all([
+        supabase.from('market_intelligence').select('*', { count: 'exact', head: true }).gte('scraped_at', sevenDaysAgo.toISOString()),
+        supabase.from('patent_filings').select('*', { count: 'exact', head: true }).gte('filing_date', thirtyDaysAgo.toISOString().slice(0, 10)),
+        supabase.from('social_posts').select('*', { count: 'exact', head: true }).eq('status', 'queued'),
+      ])
+      setAgentStats({
+        insights: insightsRes.count ?? 0,
+        patents: patentsRes.count ?? 0,
+        postsQueued: queuedRes.count ?? 0
+      })
+    } catch (_) {}
   }
 
   const saveStats = (newStats: typeof stats) => {
@@ -144,6 +186,23 @@ export default function HomeDashboard() {
         >
           🔄 Sync with Database
         </button>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-white/20">
+          <div className="glass-card p-4">
+            <div className="text-2xl mb-1">🔍</div>
+            <div className="text-sm text-white/60 mb-1">Insights Gathered (7d)</div>
+            <div className="text-xl font-bold text-white">{agentStats.insights}</div>
+          </div>
+          <div className="glass-card p-4">
+            <div className="text-2xl mb-1">📄</div>
+            <div className="text-sm text-white/60 mb-1">Patents Tracked (30d)</div>
+            <div className="text-xl font-bold text-white">{agentStats.patents}</div>
+          </div>
+          <div className="glass-card p-4">
+            <div className="text-2xl mb-1">📱</div>
+            <div className="text-sm text-white/60 mb-1">Posts Queued</div>
+            <div className="text-xl font-bold text-white">{agentStats.postsQueued}</div>
+          </div>
+        </div>
       </div>
 
       {/* To-Do List */}
