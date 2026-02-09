@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { sendEmail, isValidEmail } from '@/lib/resend'
+import { sendEmail } from '@/lib/resend'
 import { createClient } from '@/lib/supabase'
 
 export async function POST(request: Request) {
@@ -15,13 +15,17 @@ export async function POST(request: Request) {
       )
     }
 
-    // Validate email format
-    if (!isValidEmail(to)) {
+    // Validate email format (inline)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(to)) {
       return NextResponse.json(
         { error: 'Invalid email address' },
         { status: 400 }
       )
     }
+
+    // Authenticate user (optional - add your auth logic here)
+    const supabase = createClient()
 
     // Authenticate user (optional - add your auth logic here)
     const supabase = createClient()

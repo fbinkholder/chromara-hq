@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEffect, useState } from 'react'
 import { 
   Home, 
-  Handshake, 
+  Users, 
   Target, 
   Instagram, 
   Wrench, 
@@ -84,7 +84,7 @@ const navigation: NavItem[] = [
       { name: 'Assets & Docs', href: '/dashboard/fundraising/assets' },
     ]
   },
-  { name: 'Partnerships', href: '/dashboard/partnerships', icon: Handshake },
+  { name: 'Partnerships', href: '/dashboard/partnerships', icon: Users },
   { name: 'Agents', href: '/dashboard/agents', icon: Bot },
   { name: 'Reference', href: '/dashboard/reference', icon: BookOpen },
   { name: 'Personal', href: '/dashboard/personal', icon: Brain },
