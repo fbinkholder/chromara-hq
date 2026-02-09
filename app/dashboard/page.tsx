@@ -83,90 +83,61 @@ export default function HomeDashboard() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-white">🏠 Command Center</h1>
 
-      {/* Stats - Now Editable */}
+      {/* Quick Stats - Editable */}
       <div className="glass-card p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-white">📊 Quick Stats</h2>
+          <h3 className="text-xl font-bold text-white">📊 Agent Stats</h3>
+          {/* If you want to keep an editable stats button, make sure the fields match state structure */}
           <button
             onClick={() => {
-              if (editingStats) {
-                setEditingStats(false)
-              } else {
-                setEditingStats(true)
+              const newPartnerships = prompt('Brand Partnerships:', stats.partnerships)
+              const newEmails = prompt('Emails Sent:', stats.emails)
+              const newContent = prompt('Content Scheduled:', stats.content)
+              const newInvestors = prompt('Investor Conversations:', stats.investors)
+              // Only update if user doesn't hit 'Cancel'
+              if (
+                newPartnerships !== null &&
+                newEmails !== null &&
+                newContent !== null &&
+                newInvestors !== null
+              ) {
+                const updated = {
+                  partnerships: newPartnerships,
+                  emails: newEmails,
+                  content: newContent,
+                  investors: newInvestors,
+                }
+                setStats(updated)
+                localStorage.setItem('chromara-stats', JSON.stringify(updated))
               }
             }}
             className="glass-button px-4 py-2 text-sm"
           >
-            {editingStats ? '✅ Done' : '✏️ Edit'}
+            ✏️ Edit Stats
           </button>
         </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* Partnerships */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="glass-card p-4">
             <div className="text-3xl mb-2">🤝</div>
-            <div className="text-sm text-white/60 mb-2">Active Partnerships</div>
-            {editingStats ? (
-              <input
-                type="number"
-                value={stats.partnerships}
-                onChange={(e) => saveStats({...stats, partnerships: e.target.value})}
-                className="w-full px-2 py-1 bg-black/30 border border-white/20 rounded text-white text-2xl font-bold"
-              />
-            ) : (
-              <div className="text-2xl font-bold text-white">{stats.partnerships}</div>
-            )}
+            <div className="text-sm text-white/60 mb-2">Brand Partnerships</div>
+            <div className="text-2xl font-bold text-white">{stats.partnerships}</div>
           </div>
-
-          {/* Emails */}
           <div className="glass-card p-4">
             <div className="text-3xl mb-2">📧</div>
             <div className="text-sm text-white/60 mb-2">Emails Sent</div>
-            {editingStats ? (
-              <input
-                type="number"
-                value={stats.emails}
-                onChange={(e) => saveStats({...stats, emails: e.target.value})}
-                className="w-full px-2 py-1 bg-black/30 border border-white/20 rounded text-white text-2xl font-bold"
-              />
-            ) : (
-              <div className="text-2xl font-bold text-white">{stats.emails}</div>
-            )}
+            <div className="text-2xl font-bold text-white">{stats.emails}</div>
           </div>
-
-          {/* Content */}
           <div className="glass-card p-4">
             <div className="text-3xl mb-2">📱</div>
             <div className="text-sm text-white/60 mb-2">Content Scheduled</div>
-            {editingStats ? (
-              <input
-                type="number"
-                value={stats.content}
-                onChange={(e) => saveStats({...stats, content: e.target.value})}
-                className="w-full px-2 py-1 bg-black/30 border border-white/20 rounded text-white text-2xl font-bold"
-              />
-            ) : (
-              <div className="text-2xl font-bold text-white">{stats.content}</div>
-            )}
+            <div className="text-2xl font-bold text-white">{stats.content}</div>
           </div>
-
-          {/* Investors */}
           <div className="glass-card p-4">
             <div className="text-3xl mb-2">💰</div>
             <div className="text-sm text-white/60 mb-2">Investor Conversations</div>
-            {editingStats ? (
-              <input
-                type="number"
-                value={stats.investors}
-                onChange={(e) => saveStats({...stats, investors: e.target.value})}
-                className="w-full px-2 py-1 bg-black/30 border border-white/20 rounded text-white text-2xl font-bold"
-              />
-            ) : (
-              <div className="text-2xl font-bold text-white">{stats.investors}</div>
-            )}
+            <div className="text-2xl font-bold text-white">{stats.investors}</div>
           </div>
         </div>
-
         <button
           onClick={loadRealStats}
           className="mt-4 glass-button px-6 py-2 text-sm"
