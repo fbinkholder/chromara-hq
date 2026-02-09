@@ -23,9 +23,7 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
-
-    // Authenticate user (optional - add your auth logic here)
-    const supabase = createClient()
+    
 
     // Authenticate user (optional - add your auth logic here)
     const supabase = createClient()
