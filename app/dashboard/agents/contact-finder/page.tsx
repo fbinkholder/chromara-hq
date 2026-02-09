@@ -3,62 +3,34 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 
-type Contact = {
-  id: string
-  name: string
-  title: string
-  company: string
-  email: string
-  linkedin_url?: string
-}
-
 export default function ContactFinderPage() {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searching, setSearching] = useState(false)
-  const [results, setResults] = useState<Contact[]>([])
-  const [saving, setSaving] = useState<string | null>(null)
+  const [formData, setFormData] = useState({
+    name: '',
+    title: '',
+    company: '',
+    email: '',
+    linkedin_url: '',
+    segment: 'beauty brands',
+    priority: 'medium'
+  })
+  const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return
-
-    setSearching(true)
-    setResults([])
-
-    try {
-      const response = await fetch('/api/apollo/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: searchQuery })
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Search failed')
-      }
-
-      setResults(data.contacts || [])
-      
-      if (data.contacts.length === 0) {
-        alert('No contacts found. Try a different search query.')
-      }
-    } catch (error: any) {
-      console.error('Search error:', error)
-      alert('Search failed: ' + error.message)
-    } finally {
-      setSearching(false)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!formData.name || !formData.company) {
+      alert('Name and Company are required!')
+      return
     }
-  }
 
-  const handleAddContact = async (contact: Contact) => {
-    setSaving(contact.id)
+    setSaving(true)
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
       
       if (!user) {
-        alert('You must be logged in to save contacts')
+        alert('You must be logged in')
         return
       }
 
@@ -66,95 +38,168 @@ export default function ContactFinderPage() {
         .from('outreach_contacts')
         .insert({
           user_id: user.id,
-          company: contact.company,
-          contact_name: contact.name,
-          title: contact.title,
-          email: contact.email,
-          linkedin_url: contact.linkedin_url,
-          segment: 'beauty brands',
-          priority: 'medium',
+          contact_name: formData.name,
+          title: formData.title,
+          company: formData.company,
+          email: formData.email || null,
+          linkedin_url: formData.linkedin_url || null,
+          segment: formData.segment,
+          priority: formData.priority,
           status: 'not_contacted'
         })
 
       if (error) throw error
 
-      alert('✅ Added to Partnership Tracker!')
-      setResults(results.filter(r => r.id !== contact.id))
+      alert('✅ Contact added successfully!')
+      
+      // Reset form
+      setFormData({
+        name: '',
+        title: '',
+        company: '',
+        email: '',
+        linkedin_url: '',
+        segment: 'beauty brands',
+        priority: 'medium'
+      })
     } catch (error: any) {
-      console.error('Save error:', error)
-      alert('Failed to save: ' + error.message)
+      console.error('Error:', error)
+      alert('Failed to add contact: ' + error.message)
     } finally {
-      setSaving(null)
+      setSaving(false)
     }
   }
 
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h1 className="text-4xl font-bold text-white mb-3">🔍 Contact Finder</h1>
-        <p className="text-white/60 text-lg">Search Apollo.io for beauty industry contacts</p>
+        <h1 className="text-4xl font-bold text-white mb-3">➕ Add Contact Manually</h1>
+        <p className="text-white/60 text-lg">Find contacts on LinkedIn/Apollo, then add them here</p>
       </div>
 
-      <div className="glass-card p-6">
-        <div className="flex gap-4">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="e.g., VP Innovation beauty brands"
-            className="flex-1 px-4 py-3 bg-black/30 border border-white/20 rounded-lg text-white placeholder:text-white/40"
-          />
-          <button
-            onClick={handleSearch}
-            disabled={searching || !searchQuery.trim()}
-            className="glass-button px-8 py-3 disabled:opacity-50"
-          >
-            {searching ? '⏳ Searching...' : '🔍 Search'}
-          </button>
-        </div>
-      </div>
-
-      {results.length > 0 && (
-        <div className="glass-card p-6">
-          <h2 className="text-xl font-bold text-white mb-4">
-            Found {results.length} contacts
-          </h2>
-
-          <div className="space-y-4">
-            {results.map((contact) => (
-              <div key={contact.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white">{contact.name}</h3>
-                    <p className="text-white/80">{contact.title}</p>
-                    <p className="text-white/60">{contact.company}</p>
-                    {contact.email && (
-                      <p className="text-sm text-chromara-purple mt-2">📧 {contact.email}</p>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => handleAddContact(contact)}
-                    disabled={saving === contact.id}
-                    className="glass-button px-6 py-2 text-sm disabled:opacity-50"
-                  >
-                    {saving === contact.id ? '⏳ Adding...' : '➕ Add'}
-                  </button>
-                </div>
-              </div>
-            ))}
+      <div className="glass-card p-8 max-w-2xl mx-auto">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          
+          {/* Name */}
+          <div>
+            <label className="block text-white font-semibold mb-2">
+              Contact Name <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              placeholder="Jane Smith"
+              className="w-full px-4 py-3 bg-black/30 border border-white/20 rounded-lg text-white placeholder:text-white/40"
+              required
+            />
           </div>
-        </div>
-      )}
 
-      {!searching && results.length === 0 && (
-        <div className="glass-card p-12 text-center">
-          <div className="text-6xl mb-4">🔍</div>
-          <h3 className="text-xl font-semibold text-white mb-2">Ready to find contacts!</h3>
-          <p className="text-white/60">Enter a search query above</p>
-        </div>
-      )}
+          {/* Title */}
+          <div>
+            <label className="block text-white font-semibold mb-2">Title</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({...formData, title: e.target.value})}
+              placeholder="VP of Innovation"
+              className="w-full px-4 py-3 bg-black/30 border border-white/20 rounded-lg text-white placeholder:text-white/40"
+            />
+          </div>
+
+          {/* Company */}
+          <div>
+            <label className="block text-white font-semibold mb-2">
+              Company <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.company}
+              onChange={(e) => setFormData({...formData, company: e.target.value})}
+              placeholder="L'Oréal"
+              className="w-full px-4 py-3 bg-black/30 border border-white/20 rounded-lg text-white placeholder:text-white/40"
+              required
+            />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-white font-semibold mb-2">Email</label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
+              placeholder="jane.smith@loreal.com"
+              className="w-full px-4 py-3 bg-black/30 border border-white/20 rounded-lg text-white placeholder:text-white/40"
+            />
+          </div>
+
+          {/* LinkedIn */}
+          <div>
+            <label className="block text-white font-semibold mb-2">LinkedIn URL</label>
+            <input
+              type="url"
+              value={formData.linkedin_url}
+              onChange={(e) => setFormData({...formData, linkedin_url: e.target.value})}
+              placeholder="https://linkedin.com/in/janesmith"
+              className="w-full px-4 py-3 bg-black/30 border border-white/20 rounded-lg text-white placeholder:text-white/40"
+            />
+          </div>
+
+          {/* Segment */}
+          <div>
+            <label className="block text-white font-semibold mb-2">Segment</label>
+            <select
+              value={formData.segment}
+              onChange={(e) => setFormData({...formData, segment: e.target.value})}
+              className="w-full px-4 py-3 bg-black/30 border border-white/20 rounded-lg text-white"
+            >
+              <option value="beauty brands">Beauty Brands</option>
+              <option value="retail partners">Retail Partners</option>
+              <option value="investors">Investors</option>
+              <option value="manufacturers">Manufacturers</option>
+              <option value="press">Press/Media</option>
+            </select>
+          </div>
+
+          {/* Priority */}
+          <div>
+            <label className="block text-white font-semibold mb-2">Priority</label>
+            <select
+              value={formData.priority}
+              onChange={(e) => setFormData({...formData, priority: e.target.value})}
+              className="w-full px-4 py-3 bg-black/30 border border-white/20 rounded-lg text-white"
+            >
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full glass-button py-4 text-lg font-semibold disabled:opacity-50"
+          >
+            {saving ? '⏳ Adding...' : '✅ Add Contact'}
+          </button>
+        </form>
+      </div>
+
+      {/* Quick Tip */}
+      <div className="glass-card p-6 max-w-2xl mx-auto">
+        <h3 className="text-lg font-bold text-white mb-3">💡 Quick Tip</h3>
+        <p className="text-white/80 mb-3">Find contacts on:</p>
+        <ul className="list-disc list-inside space-y-2 text-white/70">
+          <li><strong>LinkedIn:</strong> Search "VP Innovation beauty brands"</li>
+          <li><strong>Apollo.io:</strong> Use their web interface (no API needed)</li>
+          <li><strong>Company websites:</strong> Look for leadership pages</li>
+        </ul>
+        <p className="text-white/60 text-sm mt-4">
+          Then copy/paste their info here → Auto-added to Partnership Tracker!
+        </p>
+      </div>
     </div>
   )
 }
