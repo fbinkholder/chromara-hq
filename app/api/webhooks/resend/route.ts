@@ -36,8 +36,7 @@ export async function POST(request: Request) {
           .from('sent_emails')
           .update({ 
             opened: true, 
-            opened_at: new Date().toISOString(),
-            open_count: supabase.raw('open_count + 1')
+            opened_at: new Date().toISOString()
           })
           .eq('resend_id', event.data.email_id)
 
@@ -59,8 +58,7 @@ export async function POST(request: Request) {
           .from('sent_emails')
           .update({ 
             clicked: true, 
-            clicked_at: new Date().toISOString(),
-            click_count: supabase.raw('click_count + 1')
+            clicked_at: new Date().toISOString()
           })
           .eq('resend_id', event.data.email_id)
 
