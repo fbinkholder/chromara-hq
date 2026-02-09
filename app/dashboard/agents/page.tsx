@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase'
 import { GlobalSearchModal } from './components/GlobalSearchModal'
 import { CalendarViewModal } from './components/CalendarViewModal'
 
@@ -9,6 +10,58 @@ export default function OutreachAgentPage() {
   const [dailyLimit, setDailyLimit] = useState(50)
   const [showGlobalSearch, setShowGlobalSearch] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
+  
+  // Real stats from Supabase
+  const [stats, setStats] = useState({
+    brandsContacted: 0,
+    emailsSent: 0,
+    followUpsSent: 0,
+    responses: 0
+  })
+  const [loadingStats, setLoadingStats] = useState(true)
+  const supabase = createClient()
+  
+  useEffect(() => {
+    loadStats()
+  }, [])
+  
+  const loadStats = async () => {
+    try {
+      // Count beauty brands contacted
+      const { count: brandsCount } = await supabase
+        .from('outreach_contacts')
+        .select('*', { count: 'exact', head: true })
+        .ilike('segment', '%beauty%')
+      
+      // Count all emails sent
+      const { count: emailsCount } = await supabase
+        .from('sent_emails')
+        .select('*', { count: 'exact', head: true })
+      
+      // Count follow-ups (emails with variant names)
+      const { count: followUpsCount } = await supabase
+        .from('sent_emails')
+        .select('*', { count: 'exact', head: true })
+        .not('variant_name', 'is', null)
+      
+      // Count responses (contacts who responded)
+      const { count: responsesCount } = await supabase
+        .from('outreach_contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('response_received', true)
+      
+      setStats({
+        brandsContacted: brandsCount || 0,
+        emailsSent: emailsCount || 0,
+        followUpsSent: followUpsCount || 0,
+        responses: responsesCount || 0
+      })
+    } catch (error) {
+      console.error('Error loading stats:', error)
+    } finally {
+      setLoadingStats(false)
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -131,12 +184,28 @@ export default function OutreachAgentPage() {
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Beauty Brands Contacted" value="12" icon="💄" />
-        <StatCard label="Emails Sent" value="45" icon="📧" />
-        <StatCard label="Follow-ups Sent" value="18" icon="🔄" />
-        <StatCard label="Responses" value="11" icon="💬" />
+     {/* Quick Stats */}
+     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard 
+          label="Beauty Brands Contacted" 
+          value={loadingStats ? "..." : stats.brandsContacted.toString()} 
+          icon="💄" 
+        />
+        <StatCard 
+          label="Emails Sent" 
+          value={loadingStats ? "..." : stats.emailsSent.toString()} 
+          icon="📧" 
+        />
+        <StatCard 
+          label="Follow-ups Sent" 
+          value={loadingStats ? "..." : stats.followUpsSent.toString()} 
+          icon="🔄" 
+        />
+        <StatCard 
+          label="Responses" 
+          value={loadingStats ? "..." : stats.responses.toString()} 
+          icon="💬" 
+        />
       </div>
 
       {/* Main Features */}
