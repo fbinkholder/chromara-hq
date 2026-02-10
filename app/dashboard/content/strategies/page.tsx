@@ -187,7 +187,7 @@ export default function PlatformStrategiesPage() {
                                 {metric.replace(/_/g, ' ')}
                               </span>
                               <span className="text-white/60">
-                                {(strategy.current_stats ?? {})[metric] ?? 0} / {strategy.goals[metric]}
+                                {(strategy.current_stats ?? {})[metric] ?? 0} / {(strategy.goals ?? {})[metric]}
                               </span>
                             </div>
                             <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
@@ -196,7 +196,7 @@ export default function PlatformStrategiesPage() {
                                 style={{
                                   width: `${Math.min(
                                     100,
-                                    (((strategy.current_stats ?? {})[metric] ?? 0) / strategy.goals[metric]) * 100
+                                    (((strategy.current_stats ?? {})[metric] ?? 0) / ((strategy.goals ?? {})[metric] || 1)) * 100
                                   )}%`,
                                 }}
                               />
