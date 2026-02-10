@@ -45,11 +45,11 @@ const navigation: NavItem[] = [
     href: '/dashboard/marketing', 
     icon: Target,
     subPages: [
-      { name: 'Content Calendar', href: '/dashboard/marketing/content-calendar' },
-      { name: 'Campaign Tracker', href: '/dashboard/marketing/campaigns' },
-      { name: 'KPIs & Analytics', href: '/dashboard/marketing/kpis' },
-      { name: 'PR Tracker', href: '/dashboard/marketing/pr' },
-      { name: 'Ambassadors', href: '/dashboard/marketing/ambassadors' },
+      { name: 'Content Calendar', href: '/dashboard/content/calendar' },
+      { name: 'Campaign Tracker', href: '/dashboard/campaigns' },
+      { name: 'KPIs & Analytics', href: '/dashboard/analytics' },
+      { name: 'PR Tracker', href: '/dashboard/press' },
+      { name: 'Ambassadors', href: '/dashboard/ambassadors' },
     ]
   },
   { 
@@ -70,6 +70,7 @@ const navigation: NavItem[] = [
     href: '/dashboard/content', 
     icon: Instagram,
     subPages: [
+      { name: 'Social Media Manager', href: '/dashboard/content/social' },
       { name: 'Content Ideas', href: '/dashboard/content/ideas' },
       { name: 'Hashtag Library', href: '/dashboard/content/hashtags' },
       { name: 'Keyword Library', href: '/dashboard/content/keywords' },

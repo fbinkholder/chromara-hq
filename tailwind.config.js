@@ -16,6 +16,11 @@ module.exports = {
           white: '#FFFFFF',
           glass: 'rgba(255, 255, 255, 0.1)',
           'glass-border': 'rgba(255, 255, 255, 0.2)',
+          'chrome-silver': '#E5E7EB',
+          lilac: '#C4B5FD',
+          'violet-led': '#A855F7',
+          'deep-purple': '#7C3AED',
+          'black-bg': '#0A0A0A',
         },
       },
       backgroundImage: {

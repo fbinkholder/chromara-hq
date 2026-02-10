@@ -1,7 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+
+const EMAIL_WRITER_CONTACT_KEY = 'chromara-email-writer-contact'
 
 type Contact = {
   id: string
@@ -30,6 +33,18 @@ export default function ContactFinderPage() {
   const [savedContacts, setSavedContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
+  const router = useRouter()
+
+  const openInEmailWriter = (contact: Contact) => {
+    if (typeof window === 'undefined') return
+    sessionStorage.setItem(EMAIL_WRITER_CONTACT_KEY, JSON.stringify({
+      companyName: contact.company,
+      contactName: contact.contact_name,
+      contactTitle: contact.title || '',
+      customNotes: contact.segment ? `Segment: ${contact.segment}` : '',
+    }))
+    router.push('/dashboard/agents/email-writer')
+  }
 
   useEffect(() => {
     loadContacts()
@@ -285,12 +300,20 @@ export default function ContactFinderPage() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => deleteContact(contact.id)}
-                      className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all ml-4"
-                    >
-                      🗑️
-                    </button>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all ml-4">
+                      <button
+                        onClick={() => openInEmailWriter(contact)}
+                        className="px-3 py-1.5 rounded-lg bg-chromara-purple/30 hover:bg-chromara-purple/50 text-white text-sm"
+                      >
+                        ✉️ Write email
+                      </button>
+                      <button
+                        onClick={() => deleteContact(contact.id)}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

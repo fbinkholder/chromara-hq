@@ -74,6 +74,25 @@ export default function PartnershipsPage() {
     }
   }
 
+  const updateContactStatus = async (contactId: string, newStatus: Contact['status']) => {
+    try {
+      const { error } = await supabase
+        .from('outreach_contacts')
+        .update({
+          status: newStatus,
+          ...(newStatus === 'reached_out' ? { date_reached_out: new Date().toISOString() } : {}),
+          ...(['responded', 'interested', 'moving_forward'].includes(newStatus) ? { response_received: true } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', contactId)
+      if (error) throw error
+      loadContacts()
+    } catch (error) {
+      console.error('Error updating status:', error)
+      alert('Failed to update status')
+    }
+  }
+
   const applyFilters = () => {
     let filtered = [...contacts]
 
@@ -230,12 +249,12 @@ export default function PartnershipsPage() {
             </div>
           ) : (
             filteredContacts.map((contact) => (
-              <ContactCard key={contact.id} contact={contact} onUpdate={loadContacts} />
+              <ContactCard key={contact.id} contact={contact} onUpdate={loadContacts} onStatusChange={updateContactStatus} />
             ))
           )}
         </div>
       ) : (
-        <PipelineView contacts={filteredContacts} onUpdate={loadContacts} />
+        <PipelineView contacts={filteredContacts} onUpdate={loadContacts} onStatusChange={updateContactStatus} />
       )}
 
       {/* Add Contact Modal */}
@@ -258,7 +277,16 @@ function StatCard({ label, value }: { label: string; value: number | string }) {
   )
 }
 
-function ContactCard({ contact, onUpdate }: { contact: Contact; onUpdate: () => void }) {
+const STATUS_OPTIONS: { value: Contact['status']; label: string }[] = [
+  { value: 'not_contacted', label: 'Not contacted' },
+  { value: 'reached_out', label: 'Reached out' },
+  { value: 'responded', label: 'Responded' },
+  { value: 'interested', label: 'Interested' },
+  { value: 'declined', label: 'Declined' },
+  { value: 'moving_forward', label: 'Moving forward' },
+]
+
+function ContactCard({ contact, onUpdate, onStatusChange }: { contact: Contact; onUpdate: () => void; onStatusChange: (id: string, status: Contact['status']) => void }) {
   return (
     <div className="glass-card p-4 hover:scale-[1.01] transition-all cursor-pointer">
       <div className="flex items-start justify-between mb-3">
@@ -272,9 +300,18 @@ function ContactCard({ contact, onUpdate }: { contact: Contact; onUpdate: () => 
           <p className="text-white/80">{contact.contact_name} • {contact.title}</p>
           <p className="text-sm text-white/60">{contact.segment}</p>
         </div>
-        <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[contact.status]}`}>
-          {contact.status.replace('_', ' ').toUpperCase()}
-        </span>
+        <select
+          value={contact.status}
+          onChange={(e) => onStatusChange(contact.id, e.target.value as Contact['status'])}
+          onClick={(e) => e.stopPropagation()}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium border-0 cursor-pointer bg-white/10 text-white ${statusColors[contact.status]}`}
+        >
+          {STATUS_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value} className="bg-gray-900 text-white">
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="flex items-center gap-4 text-sm text-white/60 mb-3">
@@ -305,8 +342,8 @@ function ContactCard({ contact, onUpdate }: { contact: Contact; onUpdate: () => 
   )
 }
 
-function PipelineView({ contacts, onUpdate }: { contacts: Contact[]; onUpdate: () => void }) {
-  const stages = [
+function PipelineView({ contacts, onUpdate, onStatusChange }: { contacts: Contact[]; onUpdate: () => void; onStatusChange: (id: string, status: Contact['status']) => void }) {
+  const stages: { key: Contact['status']; label: string; emoji: string }[] = [
     { key: 'not_contacted', label: 'Not Contacted', emoji: '📭' },
     { key: 'reached_out', label: 'Reached Out', emoji: '📤' },
     { key: 'responded', label: 'Responded', emoji: '💬' },
@@ -329,9 +366,21 @@ function PipelineView({ contacts, onUpdate }: { contacts: Contact[]; onUpdate: (
             </div>
             <div className="space-y-2">
               {stageContacts.map((contact) => (
-                <div key={contact.id} className="bg-white/5 p-3 rounded-lg hover:bg-white/10 transition-all cursor-pointer">
+                <div key={contact.id} className="bg-white/5 p-3 rounded-lg hover:bg-white/10 transition-all group">
                   <p className="font-medium text-white text-sm">{contact.company}</p>
                   <p className="text-xs text-white/60">{contact.contact_name}</p>
+                  <select
+                    value={contact.status}
+                    onChange={(e) => onStatusChange(contact.id, e.target.value as Contact['status'])}
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-2 w-full px-2 py-1 rounded text-xs bg-white/10 text-white border border-white/20 cursor-pointer"
+                  >
+                    {STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value} className="bg-gray-900 text-white">
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               ))}
             </div>

@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --chrome-silver: #E5E7EB;
+  --lilac: #C4B5FD;
+  --violet-led: #A855F7;
+  --deep-purple: #7C3AED;
+  --black-bg: #0A0A0A;
+}
+
 @layer components {
   .glass-card {
     @apply bg-white/10 backdrop-blur-[20px] rounded-2xl border border-white/20 shadow-lg;

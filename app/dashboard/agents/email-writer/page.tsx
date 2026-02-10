@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+const EMAIL_WRITER_CONTACT_KEY = 'chromara-email-writer-contact'
 
 type EmailVariant = 'strategic' | 'founder' | 'research'
 
@@ -31,6 +33,20 @@ export default function EmailWriterPage() {
   const [generating, setGenerating] = useState(false)
   const [generatedEmail, setGeneratedEmail] = useState('')
   const [subject, setSubject] = useState('')
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = sessionStorage.getItem(EMAIL_WRITER_CONTACT_KEY)
+    if (!raw) return
+    try {
+      const data = JSON.parse(raw)
+      if (data.companyName) setCompanyName(data.companyName)
+      if (data.contactName) setContactName(data.contactName)
+      if (data.contactTitle) setContactTitle(data.contactTitle || '')
+      if (data.customNotes) setCustomNotes(data.customNotes || '')
+      sessionStorage.removeItem(EMAIL_WRITER_CONTACT_KEY)
+    } catch (_) {}
+  }, [])
 
   const generateEmail = async () => {
     if (!companyName || !contactName) {
