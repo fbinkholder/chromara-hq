@@ -10,6 +10,8 @@ type StatusCard = { id: string; title: string; status: string; progress: number;
 type TimelineItem = { id: string; title: string; date: string; status: 'complete' | 'in-progress' | 'upcoming'; description: string }
 type DocCard = { id: string; title: string; date: string; type: string }
 
+type EditFormState = Partial<Omit<StatusCard & TimelineItem & DocCard, 'status'> & { status?: string }>
+
 const DEFAULT_STATUS: StatusCard[] = []
 const DEFAULT_TIMELINE: TimelineItem[] = []
 const DEFAULT_DOCS: DocCard[] = []
@@ -21,7 +23,7 @@ export default function EngineeringDashboard() {
   const [timeline, setTimeline] = useState<TimelineItem[]>(DEFAULT_TIMELINE)
   const [docs, setDocs] = useState<DocCard[]>(DEFAULT_DOCS)
   const [editing, setEditing] = useState<{ section: string; id?: string } | null>(null)
-  const [editForm, setEditForm] = useState<Partial<StatusCard & TimelineItem & DocCard>>({})
+  const [editForm, setEditForm] = useState<EditFormState>({})
 
   const load = () => {
     try {
@@ -229,7 +231,7 @@ export default function EngineeringDashboard() {
                       <option value="complete">Complete</option>
                     </select>
                     <div className="flex gap-2">
-                      <button onClick={() => updateTimeline(t.id, editForm)} className="glass-button px-2 py-1 text-xs">Save</button>
+                      <button onClick={() => updateTimeline(t.id, { ...editForm, status: (editForm.status || t.status) as TimelineItem['status'] })} className="glass-button px-2 py-1 text-xs">Save</button>
                       <button onClick={() => setEditing(null)} className="px-2 py-1 text-white/60 hover:text-white text-xs">Cancel</button>
                       <button onClick={() => deleteTimeline(t.id)} className="text-red-400 text-xs">Delete</button>
                     </div>
