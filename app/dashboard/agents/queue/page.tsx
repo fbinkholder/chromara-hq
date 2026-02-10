@@ -21,6 +21,7 @@ export default function EmailQueuePage() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'scheduled'>('pending')
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
   const [showPreview, setShowPreview] = useState<QueuedEmail | null>(null)
+  const [editingEmail, setEditingEmail] = useState<QueuedEmail | null>(null)
 
   const supabase = createClient()
 
@@ -128,6 +129,12 @@ Founder & CEO, Chromara`,
     setSelectedEmails(new Set())
   }
 
+  const saveEditedEmail = (updated: QueuedEmail) => {
+    setEmails(emails.map(e => (e.id === updated.id ? updated : e)))
+    setEditingEmail(null)
+    setShowPreview(null)
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -232,6 +239,7 @@ Founder & CEO, Chromara`,
               selected={selectedEmails.has(email.id)}
               onToggle={() => toggleEmail(email.id)}
               onPreview={() => setShowPreview(email)}
+              onEdit={() => setEditingEmail(email)}
             />
           ))}
         </div>
@@ -242,6 +250,10 @@ Founder & CEO, Chromara`,
         <EmailPreviewModal
           email={showPreview}
           onClose={() => setShowPreview(null)}
+          onEdit={() => {
+            setEditingEmail(showPreview)
+            setShowPreview(null)
+          }}
           onApprove={() => {
             alert('Email approved for sending!')
             setShowPreview(null)
@@ -253,6 +265,14 @@ Founder & CEO, Chromara`,
               setShowPreview(null)
             }
           }}
+        />
+      )}
+
+      {editingEmail && (
+        <EmailEditModal
+          email={editingEmail}
+          onClose={() => setEditingEmail(null)}
+          onSave={saveEditedEmail}
         />
       )}
     </div>
@@ -271,11 +291,12 @@ function StatCard({ label, value, icon }: { label: string; value: number; icon: 
   )
 }
 
-function EmailCard({ email, selected, onToggle, onPreview }: {
+function EmailCard({ email, selected, onToggle, onPreview, onEdit }: {
   email: QueuedEmail
   selected: boolean
   onToggle: () => void
   onPreview: () => void
+  onEdit: () => void
 }) {
   const statusColors = {
     pending: 'bg-yellow-500/20 text-yellow-300',
@@ -333,6 +354,12 @@ function EmailCard({ email, selected, onToggle, onPreview }: {
             >
               👁️ Preview
             </button>
+            <button
+              onClick={onEdit}
+              className="px-3 py-1 bg-chromara-purple/20 hover:bg-chromara-purple/30 rounded-lg text-chromara-lilac text-sm transition-all"
+            >
+              ✏️ Edit
+            </button>
             <span className={`px-3 py-1 rounded-full text-xs ${
               email.variant === 'strategic' ? 'bg-blue-500/20 text-blue-300' :
               email.variant === 'founder' ? 'bg-purple-500/20 text-purple-300' :
@@ -347,9 +374,10 @@ function EmailCard({ email, selected, onToggle, onPreview }: {
   )
 }
 
-function EmailPreviewModal({ email, onClose, onApprove, onSchedule }: {
+function EmailPreviewModal({ email, onClose, onEdit, onApprove, onSchedule }: {
   email: QueuedEmail
   onClose: () => void
+  onEdit: () => void
   onApprove: () => void
   onSchedule: () => void
 }) {
@@ -401,12 +429,18 @@ function EmailPreviewModal({ email, onClose, onApprove, onSchedule }: {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-white/20">
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-white/20 flex-wrap">
           <button
             onClick={onClose}
             className="px-6 py-3 rounded-full border border-white/20 text-white hover:bg-white/10 transition-all"
           >
             Cancel
+          </button>
+          <button
+            onClick={onEdit}
+            className="px-6 py-3 rounded-full bg-chromara-purple/20 hover:bg-chromara-purple/30 text-chromara-lilac transition-all"
+          >
+            ✏️ Edit
           </button>
           <button
             onClick={onSchedule}
@@ -419,6 +453,107 @@ function EmailPreviewModal({ email, onClose, onApprove, onSchedule }: {
             className="glass-button"
           >
             ✅ Approve & Send
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EmailEditModal({ email, onClose, onSave }: {
+  email: QueuedEmail
+  onClose: () => void
+  onSave: (updated: QueuedEmail) => void
+}) {
+  const [form, setForm] = useState<QueuedEmail>({ ...email })
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = () => {
+    setSaving(true)
+    onSave(form)
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="glass-card max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-white/20">
+          <h2 className="text-2xl font-bold text-white">Edit Email</h2>
+          <button onClick={onClose} className="text-white/60 hover:text-white text-2xl">✕</button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-white/80 mb-1">Recipient Name</label>
+              <input
+                value={form.recipient_name}
+                onChange={(e) => setForm(f => ({ ...f, recipient_name: e.target.value }))}
+                className="glass-input w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-white/80 mb-1">Recipient Email</label>
+              <input
+                type="email"
+                value={form.recipient_email}
+                onChange={(e) => setForm(f => ({ ...f, recipient_email: e.target.value }))}
+                className="glass-input w-full"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-white/80 mb-1">Company</label>
+            <input
+              value={form.company}
+              onChange={(e) => setForm(f => ({ ...f, company: e.target.value }))}
+              className="glass-input w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-white/80 mb-1">Subject</label>
+            <input
+              value={form.subject}
+              onChange={(e) => setForm(f => ({ ...f, subject: e.target.value }))}
+              className="glass-input w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-white/80 mb-1">Variant</label>
+            <select
+              value={form.variant}
+              onChange={(e) => setForm(f => ({ ...f, variant: e.target.value as QueuedEmail['variant'] }))}
+              className="glass-input w-full"
+            >
+              <option value="strategic">Strategic</option>
+              <option value="founder">Founder</option>
+              <option value="research">Research</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-white/80 mb-1">Body</label>
+            <textarea
+              value={form.body}
+              onChange={(e) => setForm(f => ({ ...f, body: e.target.value }))}
+              className="glass-input w-full min-h-[240px] font-sans whitespace-pre-wrap"
+              placeholder="Email body..."
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-white/20">
+          <button
+            onClick={onClose}
+            className="px-6 py-3 rounded-full border border-white/20 text-white hover:bg-white/10 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="glass-button px-6 py-3 disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
