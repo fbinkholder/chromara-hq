@@ -24,6 +24,9 @@
   }
 
   /* Dashboard inputs: dark glass + white text so typed content is visible */
+  .glass-button {
+    @apply bg-white/10 border border-white/20 rounded-lg text-white hover:bg-white/20 transition-all;
+  }
   .glass-input {
     @apply bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-chromara-purple focus:border-transparent;
   }

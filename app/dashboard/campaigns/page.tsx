@@ -263,8 +263,8 @@ function CampaignModal({
       budget: budget === '' ? null : Number(budget),
       status,
       channels: channels.length ? channels : null,
-      target_metrics: Object.keys(target_metrics).length ? target_metrics : null,
-      actual_metrics: Object.keys(actual_metrics).length ? actual_metrics : null,
+      target_metrics: Object.keys(target_metrics).length ? target_metrics : undefined,
+      actual_metrics: Object.keys(actual_metrics).length ? actual_metrics : undefined,
       notes: notes || null,
     })
   }
