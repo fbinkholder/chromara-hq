@@ -315,10 +315,15 @@ export default function AnalyticsPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="glass-card p-6 bg-chromara-purple/10 border border-chromara-purple/20">
-              <h4 className="font-semibold text-white mb-2">How tracking works</h4>
+              <h4 className="font-semibold text-white mb-2">How open/click tracking works</h4>
               <p className="text-sm text-white/80 mb-2">
-                <strong>Opens & clicks</strong> come from Resend webhooks when recipients open or click links. Ensure your Resend project has webhooks pointing to <code className="text-xs bg-black/30 px-1 rounded">/api/webhooks/resend</code>.
+                <strong>Opens & clicks</strong> come from Resend webhooks. The <strong>from</strong> address (e.g. faith@chromarabeauty.com vs faith@contact.chromarabeauty.com) does not affect webhooks—Resend fires events for every send from your project.
               </p>
+              <ul className="text-xs text-white/70 space-y-1 list-disc list-inside mb-2">
+                <li>Send emails through this app (Agents queue or send-email API) so we store Resend&apos;s <code className="bg-black/30 px-1 rounded">email_id</code>.</li>
+                <li>In Resend: add a webhook with URL <code className="bg-black/30 px-1 rounded">https://your-domain.com/api/webhooks/resend</code> and subscribe to <code className="bg-black/30 px-1 rounded">email.opened</code> and <code className="bg-black/30 px-1 rounded">email.clicked</code>.</li>
+                <li>In Resend → Domains → select the domain you send from → enable <strong>Open tracking</strong> (and Click tracking) in Configuration.</li>
+              </ul>
               <p className="text-xs text-white/60">
                 <strong>Responses & meetings</strong> are from your Partnerships/outreach contacts: mark contacts as Responded or Moving Forward to see them here.
               </p>
