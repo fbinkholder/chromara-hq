@@ -18,7 +18,8 @@ import {
   Menu,
   X,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  ClipboardCheck
 } from 'lucide-react'
 
 type NavItem = {
@@ -87,6 +88,14 @@ const navigation: NavItem[] = [
     ]
   },
   { name: 'Partnerships', href: '/dashboard/partnerships', icon: Users },
+  { 
+    name: 'Ops', 
+    href: '/dashboard/ops', 
+    icon: ClipboardCheck,
+    subPages: [
+      { name: 'Content Review', href: '/dashboard/ops/content-review' },
+    ]
+  },
   { name: 'Agents', href: '/dashboard/agents', icon: Bot },
   { name: 'Reference', href: '/dashboard/reference', icon: BookOpen },
   { name: 'Personal', href: '/dashboard/personal', icon: Brain },

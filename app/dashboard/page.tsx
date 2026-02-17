@@ -38,7 +38,76 @@ export default function HomeDashboard() {
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [quickWins, setQuickWins] = useState<QuickWinItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [backupStatus, setBackupStatus] = useState<'idle' | 'backingup' | 'restoring' | 'ok' | 'error'>('idle')
+  const [backupMessage, setBackupMessage] = useState('')
   const supabase = createClient()
+
+  const BACKUP_KIND = 'localStorage'
+
+  async function backupToCloud() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setBackupMessage('Not signed in.')
+      setBackupStatus('error')
+      return
+    }
+    setBackupStatus('backingup')
+    setBackupMessage('')
+    try {
+      const payload: Record<string, string> = {}
+      if (typeof window !== 'undefined') {
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const key = window.localStorage.key(i)
+          if (key?.startsWith('chromara-')) payload[key] = window.localStorage.getItem(key) ?? ''
+        }
+      }
+      const { error } = await supabase.from('user_cloud_backup').upsert(
+        { user_id: user.id, kind: BACKUP_KIND, payload, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id,kind' }
+      )
+      if (error) throw error
+      setBackupStatus('ok')
+      setBackupMessage(`Backed up ${Object.keys(payload).length} items to the cloud.`)
+    } catch (e: any) {
+      setBackupStatus('error')
+      setBackupMessage(e?.message || 'Backup failed. Run supabase/backup_schema.sql in Supabase SQL Editor once.')
+    }
+  }
+
+  async function restoreFromCloud() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setBackupMessage('Not signed in.')
+      setBackupStatus('error')
+      return
+    }
+    setBackupStatus('restoring')
+    setBackupMessage('')
+    try {
+      const { data, error } = await supabase
+        .from('user_cloud_backup')
+        .select('payload')
+        .eq('user_id', user.id)
+        .eq('kind', BACKUP_KIND)
+        .single()
+      if (error || !data?.payload) {
+        setBackupMessage('No backup found. Backup first from this device.')
+        setBackupStatus('error')
+        return
+      }
+      const payload = data.payload as Record<string, string>
+      if (typeof window !== 'undefined') {
+        for (const [key, value] of Object.entries(payload)) {
+          if (key.startsWith('chromara-')) window.localStorage.setItem(key, value)
+        }
+      }
+      setBackupStatus('ok')
+      setBackupMessage('Restored. Reload the page to see your data.')
+    } catch (e: any) {
+      setBackupStatus('error')
+      setBackupMessage(e?.message || 'Restore failed.')
+    }
+  }
 
   useEffect(() => {
     const t = new Date()
@@ -248,6 +317,35 @@ export default function HomeDashboard() {
             </ul>
           )}
         </div>
+      </div>
+
+      {/* Backup to cloud */}
+      <div className="rounded-2xl border border-green-500/30 bg-green-500/10 backdrop-blur-sm p-6">
+        <h2 className="text-xl font-bold text-white mb-2">☁️ Back up my data</h2>
+        <p className="text-white/70 text-sm mb-4">
+          Saves todos, Engineering boards, Reference links, Agents schedule, and Personal files to the cloud so you don&apos;t lose them. Restore on this or another device anytime.
+        </p>
+        <div className="flex flex-wrap gap-3 items-center">
+          <button
+            onClick={backupToCloud}
+            disabled={backupStatus === 'backingup' || backupStatus === 'restoring'}
+            className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-xl font-semibold text-white transition-all"
+          >
+            {backupStatus === 'backingup' ? 'Backing up…' : 'Backup to cloud'}
+          </button>
+          <button
+            onClick={restoreFromCloud}
+            disabled={backupStatus === 'backingup' || backupStatus === 'restoring'}
+            className="px-4 py-2 glass-button"
+          >
+            {backupStatus === 'restoring' ? 'Restoring…' : 'Restore from cloud'}
+          </button>
+        </div>
+        {backupMessage && (
+          <p className={`mt-3 text-sm ${backupStatus === 'error' ? 'text-red-300' : 'text-green-200'}`}>
+            {backupMessage}
+          </p>
+        )}
       </div>
 
       {/* To-Do */}

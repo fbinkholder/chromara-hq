@@ -152,6 +152,16 @@ All tables are automatically created when you run `database-schema.sql`:
 
 Row-level security enabled - only you can see your data.
 
+## ☁️ Backup your entire project
+
+**Code:** Push to GitHub regularly (`git push`) so your repo is in the cloud.
+
+**Data:** Most data (campaigns, content, contacts, Content Review, etc.) already lives in Supabase. The rest (todos, Engineering boards, Reference links, etc.) is stored in your browser until you back it up.
+
+- **Back up everything:** Open the **Home dashboard** and use **"Backup to cloud"** to save a snapshot of all Chromara data (including localStorage) to Supabase. Use **"Restore from cloud"** on any device to get it back.
+- **One-time setup:** Run `supabase/backup_schema.sql` in the Supabase SQL Editor once so the backup table exists.
+- **Full details:** See **[BACKUP.md](./BACKUP.md)** for what lives where and how to avoid losing data.
+
 ## 🔒 Security
 
 - **Supabase Auth**: Industry-standard authentication
