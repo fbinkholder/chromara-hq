@@ -101,7 +101,7 @@ export default function MarketIntelPage() {
           ))}
         </div>
         <p className="text-white/40 text-sm mt-3">
-          Placeholder mode: no API keys yet. Add Firecrawl / Brave / SerpAPI to get real data.
+          <strong>Competitors</strong> uses Firecrawl — add <code className="bg-black/30 px-1 rounded">FIRECRAWL_API_KEY</code> to <code className="bg-black/30 px-1 rounded">.env.local</code> (and Vercel env if deployed). SEO, Trends, and Consumer are placeholders until other APIs are added.
         </p>
       </div>
 

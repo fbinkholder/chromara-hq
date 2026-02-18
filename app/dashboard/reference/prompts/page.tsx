@@ -206,6 +206,8 @@ function StatCard({ label, value, icon }: { label: string; value: number | strin
   )
 }
 
+const SNIPPET_MAX = 150
+
 function PromptCard({ prompt, onCopy, onEdit, onDelete, copied }: {
   prompt: Prompt
   onCopy: () => void
@@ -213,55 +215,45 @@ function PromptCard({ prompt, onCopy, onEdit, onDelete, copied }: {
   onDelete: () => void
   copied: boolean
 }) {
+  const [expanded, setExpanded] = useState(false)
+  const snippet = expanded ? prompt.prompt : prompt.prompt.slice(0, SNIPPET_MAX) + (prompt.prompt.length > SNIPPET_MAX ? '…' : '')
+  const hasMore = prompt.prompt.length > SNIPPET_MAX
+
   return (
-    <div className="glass-card p-5 group hover:bg-white/15 transition-all">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold text-white mb-2">{prompt.title}</h3>
-          <p className="text-sm text-white/60 mb-3">{prompt.description}</p>
+    <div className="glass-card p-4 group hover:bg-white/15 transition-all">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0" onClick={() => setExpanded(!expanded)}>
+          <h3 className="text-base font-semibold text-white truncate">{prompt.title}</h3>
+          {prompt.description && <p className="text-sm text-white/60 truncate mt-0.5">{prompt.description}</p>}
+          <div className="mt-2 bg-black/20 rounded-lg p-3">
+            <pre className={`text-xs text-white/80 whitespace-pre-wrap font-mono ${expanded ? '' : 'line-clamp-3'}`}>
+              {snippet}
+            </pre>
+            {hasMore && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setExpanded(!expanded) }}
+                className="text-xs text-chromara-purple mt-1 hover:underline"
+              >
+                {expanded ? 'Show less' : 'Show more'}
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={onEdit}
-            className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-white text-sm transition-all"
-          >
-            ✏️ Edit
+        <div className="flex flex-col gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <button type="button" onClick={() => onCopy()} className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-white text-xs">
+            {copied ? '✓ Copied' : '📋 Copy'}
           </button>
-          <button
-            onClick={onDelete}
-            className="px-3 py-1 bg-white/10 hover:bg-red-500/20 rounded-lg text-white text-sm transition-all"
-          >
-            🗑️
-          </button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onEdit() }} className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-white text-xs">✏️</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onDelete() }} className="px-2 py-1 bg-white/10 hover:bg-red-500/20 rounded text-white text-xs">🗑️</button>
         </div>
       </div>
-
-      {/* Prompt Text */}
-      <div className="bg-black/30 rounded-lg p-4 mb-3 relative group/prompt">
-        <pre className="text-sm text-white/80 whitespace-pre-wrap font-mono">
-          {prompt.prompt}
-        </pre>
-        <button
-          onClick={onCopy}
-          className="absolute top-2 right-2 px-3 py-1 bg-gradient-to-r from-chromara-purple to-chromara-pink rounded-lg text-white text-xs opacity-0 group-hover/prompt:opacity-100 transition-all"
-        >
-          {copied ? '✓ Copied!' : '📋 Copy'}
-        </button>
-      </div>
-
-      {/* Tags */}
-      <div className="flex flex-wrap gap-2">
-        <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs">
-          📁 {prompt.category}
-        </span>
-        {prompt.llm.map(llm => (
-          <span key={llm} className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-xs">
-            🤖 {llm}
-          </span>
+      <div className="flex flex-wrap gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+        <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded text-xs">{prompt.category}</span>
+        {prompt.llm.slice(0, 2).map(llm => (
+          <span key={llm} className="px-2 py-0.5 bg-purple-500/20 text-purple-300 rounded text-xs">{llm}</span>
         ))}
-        <span className="px-3 py-1 bg-pink-500/20 text-pink-300 rounded-full text-xs">
-          📝 {prompt.outputType}
-        </span>
+        <span className="px-2 py-0.5 bg-pink-500/20 text-pink-300 rounded text-xs">{prompt.outputType}</span>
       </div>
     </div>
   )

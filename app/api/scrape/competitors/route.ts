@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase'
+import { createServerSupabase } from '@/lib/supabase-server'
 
 const COMPETITOR_URLS = [
   { name: "L'Oréal", url: 'https://www.loreal.com/en/usa/news' },
@@ -11,7 +11,7 @@ const FIRECRAWL_SCRAPE = 'https://api.firecrawl.dev/v1/scrape'
 
 export async function POST() {
   try {
-    const supabase = createClient()
+    const supabase = createServerSupabase()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

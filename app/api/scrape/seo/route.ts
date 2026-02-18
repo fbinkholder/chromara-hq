@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase'
+import { createServerSupabase } from '@/lib/supabase-server'
 
 // Placeholder: no Brave/SerpAPI key yet. Returns empty + optional mock row.
 export async function POST() {
   try {
-    const supabase = createClient()
+    const supabase = createServerSupabase()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

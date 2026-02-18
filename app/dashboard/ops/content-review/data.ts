@@ -116,6 +116,33 @@ export function rowToAsset(row: ContentReviewAssetRow): Asset {
   }
 }
 
+/** Create a new asset for "Add asset". Caller provides id (e.g. crypto.randomUUID()). */
+export function createNewAsset(input: {
+  id: string
+  title: string
+  assetType?: Asset['assetType']
+  channel?: Asset['channel']
+  description?: string
+  linkOrPath?: string
+  createdBy?: string
+  tags?: string[]
+  riskLevel?: Asset['riskLevel']
+}): Asset {
+  return seedAsset({
+    id: input.id,
+    title: input.title,
+    assetType: input.assetType ?? 'other',
+    channel: input.channel ?? 'other',
+    description: input.description,
+    linkOrPath: input.linkOrPath,
+    createdBy: input.createdBy ?? 'You',
+    createdAt: new Date().toISOString(),
+    status: 'draft',
+    tags: input.tags ?? [],
+    riskLevel: input.riskLevel ?? 'low',
+  })
+}
+
 // --- Lens checklists (edit here to add/change items) ---
 
 export const LENS_CHECKLISTS: Record<ReviewLens, LensChecklistItem[]> = {

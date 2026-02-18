@@ -6,6 +6,7 @@ import {
   LENS_CHECKLISTS,
   assetToRow,
   rowToAsset,
+  createNewAsset,
   type Asset,
   type ReviewLens,
   type LensStatus,
@@ -20,6 +21,7 @@ import {
   ArrowLeft,
   ExternalLink,
   Info,
+  Plus,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -87,6 +89,7 @@ export default function ContentReviewPage() {
   const [filterLensNotApproved, setFilterLensNotApproved] = useState<ReviewLens | 'all'>('all')
   const [comments, setComments] = useState<{ id: string; text: string; at: string }[]>([])
   const [newComment, setNewComment] = useState('')
+  const [showAddModal, setShowAddModal] = useState(false)
   const supabase = createClient()
 
   // Load assets from Supabase (cloud backup). Seed demo data if empty.
@@ -181,6 +184,21 @@ export default function ContentReviewPage() {
     })()
   }, [])
 
+  const createAsset = useCallback(async (input: { title: string; assetType?: Asset['assetType']; channel?: Asset['channel']; description?: string; linkOrPath?: string; tags?: string[]; riskLevel?: Asset['riskLevel'] }) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const id = crypto.randomUUID()
+    const { title, ...rest } = input
+    const asset = createNewAsset({ id, title, ...rest, createdBy: user?.email?.split('@')[0] || 'You' })
+    setAssets((prev) => [asset, ...prev])
+    setShowAddModal(false)
+    setSelectedId(id)
+    setSaving(true)
+    const row = assetToRow(asset, user.id)
+    await supabase.from('content_review_assets').insert({ ...row, updated_at: new Date().toISOString() })
+    setSaving(false)
+  }, [])
+
   const addComment = useCallback(async () => {
     if (!selectedId) return
     const text = newComment.trim()
@@ -210,7 +228,12 @@ export default function ContentReviewPage() {
           </h1>
           <p className="text-white/60 mt-2">Three-lens asset review: Legal, Brand, UX. Saved to the cloud.</p>
         </div>
-        {saving && <span className="text-sm text-white/50">Saving…</span>}
+        <div className="flex items-center gap-3">
+          {saving && <span className="text-sm text-white/50">Saving…</span>}
+          <button onClick={() => setShowAddModal(true)} className="glass-button px-4 py-2 flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Add asset
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -270,64 +293,132 @@ export default function ContentReviewPage() {
             </select>
           </div>
 
-          <div className="glass-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/20 text-left text-sm text-white/70">
-                    <th className="p-4 font-semibold">Title</th>
-                    <th className="p-4 font-semibold">Channel</th>
-                    <th className="p-4 font-semibold">Type</th>
-                    <th className="p-4 font-semibold">Status</th>
-                    <th className="p-4 font-semibold">Risk</th>
-                    <th className="p-4 font-semibold">Legal</th>
-                    <th className="p-4 font-semibold">Brand</th>
-                    <th className="p-4 font-semibold">UX</th>
-                    <th className="p-4 font-semibold">Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAssets.map((asset) => {
-                    const lastUpdated = [asset.legalReview.lastUpdated, asset.brandReview.lastUpdated, asset.uxReview.lastUpdated].sort().pop()!
-                    return (
-                      <tr
-                        key={asset.id}
-                        onClick={() => setSelectedId(asset.id)}
-                        className="border-b border-white/10 hover:bg-white/10 cursor-pointer transition-colors"
-                      >
-                        <td className="p-4 font-medium text-white">{asset.title}</td>
-                        <td className="p-4 text-white/80">{asset.channel}</td>
-                        <td className="p-4 text-white/80">{asset.assetType.replace(/_/g, ' ')}</td>
-                        <td className="p-4">
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-white/10 text-white/90 border border-white/20">
-                            {STATUS_LABELS[asset.status]}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium border ${RISK_COLORS[asset.riskLevel]}`}>
-                            {asset.riskLevel}
-                          </span>
-                        </td>
-                        <td className={`p-4 text-sm ${LENS_STATUS_COLORS[asset.legalReview.status]}`}>{asset.legalReview.status.replace('_', ' ')}</td>
-                        <td className={`p-4 text-sm ${LENS_STATUS_COLORS[asset.brandReview.status]}`}>{asset.brandReview.status.replace('_', ' ')}</td>
-                        <td className={`p-4 text-sm ${LENS_STATUS_COLORS[asset.uxReview.status]}`}>{asset.uxReview.status.replace('_', ' ')}</td>
-                        <td className="p-4 text-white/60 text-sm">{formatDistanceToNow(new Date(lastUpdated), { addSuffix: true })}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+          <div className="space-y-2">
+            {filteredAssets.map((asset) => {
+              const lastUpdated = [asset.legalReview.lastUpdated, asset.brandReview.lastUpdated, asset.uxReview.lastUpdated].sort().pop()!
+              const snippet = (asset.description || asset.linkOrPath || '').slice(0, 100)
+              const hasMore = (asset.description?.length ?? 0) > 100 || (asset.linkOrPath?.length ?? 0) > 100
+              return (
+                <div
+                  key={asset.id}
+                  onClick={() => setSelectedId(asset.id)}
+                  className="glass-card p-4 flex flex-col sm:flex-row sm:items-center gap-3 cursor-pointer hover:bg-white/15 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-white truncate">{asset.title}</h3>
+                    {snippet && <p className="text-sm text-white/60 truncate mt-0.5">{snippet}{hasMore ? '…' : ''}</p>}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <span className="px-2 py-0.5 rounded text-xs bg-white/10 text-white/90">{asset.channel}</span>
+                    <span className="px-2 py-0.5 rounded text-xs bg-white/10 text-white/80">{asset.assetType.replace(/_/g, ' ')}</span>
+                    <span className={`px-2 py-0.5 rounded text-xs border ${RISK_COLORS[asset.riskLevel]}`}>{asset.riskLevel}</span>
+                    <span className="px-2 py-0.5 rounded text-xs bg-white/10 text-white/90">{STATUS_LABELS[asset.status]}</span>
+                    <span className={`text-xs ${LENS_STATUS_COLORS[asset.legalReview.status]}`}>L</span>
+                    <span className={`text-xs ${LENS_STATUS_COLORS[asset.brandReview.status]}`}>B</span>
+                    <span className={`text-xs ${LENS_STATUS_COLORS[asset.uxReview.status]}`}>U</span>
+                    <span className="text-xs text-white/50">{formatDistanceToNow(new Date(lastUpdated), { addSuffix: true })}</span>
+                  </div>
+                </div>
+              )
+            })}
             {filteredAssets.length === 0 && (
-              <div className="p-12 text-center text-white/50">No assets match filters.</div>
+              <div className="glass-card p-12 text-center text-white/50">No assets match filters.</div>
             )}
           </div>
+
+          {showAddModal && (
+            <AddAssetModal
+              onClose={() => setShowAddModal(false)}
+              onSave={(input) => createAsset(input)}
+            />
+          )}
         </>
       )}
     </div>
   )
 }
 
+
+const ASSET_TYPES: Asset['assetType'][] = ['tiktok_script', 'ig_static', 'deck_slide', 'landing_page', 'email', 'other']
+const CHANNELS: Asset['channel'][] = ['tiktok', 'instagram', 'site', 'deck', 'email', 'paid_ads', 'other']
+
+function AddAssetModal({ onClose, onSave }: { onClose: () => void; onSave: (input: { title: string; assetType?: Asset['assetType']; channel?: Asset['channel']; description?: string; linkOrPath?: string; tags?: string[]; riskLevel?: Asset['riskLevel'] }) => void }) {
+  const [title, setTitle] = useState('')
+  const [assetType, setAssetType] = useState<Asset['assetType']>('other')
+  const [channel, setChannel] = useState<Asset['channel']>('other')
+  const [description, setDescription] = useState('')
+  const [linkOrPath, setLinkOrPath] = useState('')
+  const [tagsStr, setTagsStr] = useState('')
+  const [riskLevel, setRiskLevel] = useState<Asset['riskLevel']>('low')
+
+  const handleSave = () => {
+    if (!title.trim()) return
+    onSave({
+      title: title.trim(),
+      assetType,
+      channel,
+      description: description.trim() || undefined,
+      linkOrPath: linkOrPath.trim() || undefined,
+      tags: tagsStr.split(/[\s,]+/).filter(Boolean),
+      riskLevel,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="glass-card max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 border-b border-white/20">
+          <h2 className="text-xl font-bold text-white">Add asset</h2>
+          <button onClick={onClose} className="text-white/60 hover:text-white">✕</button>
+        </div>
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-sm text-white/80 mb-1">Title *</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Launch TikTok script" className="glass-input w-full" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-white/80 mb-1">Type</label>
+              <select value={assetType} onChange={(e) => setAssetType(e.target.value as Asset['assetType'])} className="glass-input w-full">
+                {ASSET_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-white/80 mb-1">Channel</label>
+              <select value={channel} onChange={(e) => setChannel(e.target.value as Asset['channel'])} className="glass-input w-full">
+                {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm text-white/80 mb-1">Risk level</label>
+            <select value={riskLevel} onChange={(e) => setRiskLevel(e.target.value as Asset['riskLevel'])} className="glass-input w-full">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-white/80 mb-1">Description</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief summary..." rows={2} className="glass-input w-full" />
+          </div>
+          <div>
+            <label className="block text-sm text-white/80 mb-1">Link or file path</label>
+            <input value={linkOrPath} onChange={(e) => setLinkOrPath(e.target.value)} placeholder="https://..." className="glass-input w-full" />
+          </div>
+          <div>
+            <label className="block text-sm text-white/80 mb-1">Tags (comma-separated)</label>
+            <input value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} placeholder="launch, tiktok" className="glass-input w-full" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 p-4 border-t border-white/20">
+          <button onClick={onClose} className="glass-button px-4 py-2">Cancel</button>
+          <button onClick={handleSave} className="px-4 py-2 bg-chromara-purple text-white rounded-lg hover:opacity-90">Add asset</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function AssetDetailView({
   asset,
@@ -347,6 +438,7 @@ function AssetDetailView({
   onAddComment: () => void
 }) {
   const [expandedLens, setExpandedLens] = useState<ReviewLens | null>('legal_compliance')
+  const [summaryExpanded, setSummaryExpanded] = useState(false)
 
   const setLensStatus = (lens: ReviewLens, status: LensStatus) => {
     const key = lens === 'legal_compliance' ? 'legalReview' : lens === 'brand_ethics' ? 'brandReview' : 'uxReview'
@@ -400,21 +492,33 @@ function AssetDetailView({
           </div>
         </div>
 
-        {asset.description && (
+        {(asset.description || asset.linkOrPath) && (
           <div className="mt-4">
-            <h3 className="text-sm font-semibold text-white/80 mb-1">Asset summary</h3>
-            <p className="text-white/90 text-sm">{asset.description}</p>
-          </div>
-        )}
-        {asset.linkOrPath && (
-          <div className="mt-2">
-            <h3 className="text-sm font-semibold text-white/80 mb-1">Link / file reference</h3>
-            {isUrl(asset.linkOrPath) ? (
-              <a href={asset.linkOrPath} target="_blank" rel="noopener noreferrer" className="text-chromara-purple hover:underline inline-flex items-center gap-1">
-                {asset.linkOrPath} <ExternalLink className="w-3 h-3" />
-              </a>
+            <button
+              onClick={() => setSummaryExpanded(!summaryExpanded)}
+              className="flex items-center gap-2 w-full text-left"
+            >
+              <h3 className="text-sm font-semibold text-white/80">Asset summary</h3>
+              {summaryExpanded ? <ChevronDown className="w-4 h-4 text-white/60" /> : <ChevronRight className="w-4 h-4 text-white/60" />}
+            </button>
+            {summaryExpanded ? (
+              <div className="mt-2 space-y-2">
+                {asset.description && <p className="text-white/90 text-sm">{asset.description}</p>}
+                {asset.linkOrPath && (
+                  isUrl(asset.linkOrPath) ? (
+                    <a href={asset.linkOrPath} target="_blank" rel="noopener noreferrer" className="text-chromara-purple hover:underline inline-flex items-center gap-1 text-sm">
+                      {asset.linkOrPath} <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ) : (
+                    <span className="text-white/80 text-sm">{asset.linkOrPath}</span>
+                  )
+                )}
+              </div>
             ) : (
-              <span className="text-white/80">{asset.linkOrPath}</span>
+              <p className="text-white/60 text-sm mt-1 truncate">
+                {(asset.description || asset.linkOrPath || '').slice(0, 120)}
+                {((asset.description?.length ?? 0) + (asset.linkOrPath?.length ?? 0)) > 120 ? '…' : ''}
+              </p>
             )}
           </div>
         )}
