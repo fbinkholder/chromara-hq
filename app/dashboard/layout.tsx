@@ -104,6 +104,7 @@ const navigation: NavItem[] = [
     icon: Brain,
     subPages: [
       { name: 'Archives', href: '/dashboard/personal/archives' },
+      { name: '2026 Chromara Wrapped', href: '/dashboard/personal/wrapped' },
     ]
   },
   { name: 'Brand', href: '/dashboard/brand', icon: Palette },

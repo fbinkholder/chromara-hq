@@ -22,13 +22,9 @@ type ActivityItem = {
   href?: string
 }
 
-type QuickWinItem = {
-  id: string
-  title: string
-  date: string
-  isToday: boolean
-  href: string
-}
+export type UserQuickWin = { id: string; title: string; addedAt: string }
+const QUICK_WINS_KEY = 'chromara-quick-wins'
+export const WRAPPED_2026_KEY = 'chromara-wrapped-2026'
 
 export default function HomeDashboard() {
   const [todos, setTodos] = useState<TodoItem[]>([])
@@ -43,7 +39,9 @@ export default function HomeDashboard() {
     insightsGathered: 0,
   })
   const [activity, setActivity] = useState<ActivityItem[]>([])
-  const [quickWins, setQuickWins] = useState<QuickWinItem[]>([])
+  const [growthPercent, setGrowthPercent] = useState<number | null>(null)
+  const [userQuickWins, setUserQuickWins] = useState<UserQuickWin[]>([])
+  const [newQuickWinTitle, setNewQuickWinTitle] = useState('')
   const [loading, setLoading] = useState(true)
   const [backupStatus, setBackupStatus] = useState<'idle' | 'backingup' | 'restoring' | 'ok' | 'error'>('idle')
   const [backupMessage, setBackupMessage] = useState('')
@@ -142,6 +140,15 @@ export default function HomeDashboard() {
   }, [])
 
   useEffect(() => {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(QUICK_WINS_KEY) : null
+    if (raw) {
+      try {
+        setUserQuickWins(JSON.parse(raw) as UserQuickWin[])
+      } catch (_) {}
+    }
+  }, [])
+
+  useEffect(() => {
     const load = async () => {
       setLoading(true)
       try {
@@ -203,27 +210,39 @@ export default function HomeDashboard() {
         activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         setActivity(activities.slice(0, 10))
 
-        const today = new Date().toISOString().slice(0, 10)
-        const weekEnd = new Date()
-        weekEnd.setDate(weekEnd.getDate() + 7)
-        const weekEndStr = weekEnd.toISOString().slice(0, 10)
-        const { data: calendarData } = await supabase
-          .from('content_calendar')
-          .select('id, title, scheduled_date')
+        // Growth % from analytics: kpis + snapshots, compare first vs last in last 30 days
+        const thirtyDaysAgo = new Date()
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        const startDate = thirtyDaysAgo.toISOString().slice(0, 10)
+        const { data: kpisData } = await supabase.from('kpis').select('id, metric_name, category').eq('user_id', uid)
+        const { data: snapData } = await supabase
+          .from('kpi_snapshots')
+          .select('metric_name, value, snapshot_date')
           .eq('user_id', uid)
-          .eq('status', 'scheduled')
-          .not('scheduled_date', 'is', null)
-          .lte('scheduled_date', weekEndStr)
-          .gte('scheduled_date', today)
-          .order('scheduled_date', { ascending: true })
-          .limit(10)
-        setQuickWins((calendarData || []).map((c: { id: string; title: string; scheduled_date: string }) => ({
-          id: c.id,
-          title: c.title,
-          date: c.scheduled_date,
-          isToday: c.scheduled_date === today,
-          href: '/dashboard/content/calendar',
-        })))
+          .gte('snapshot_date', startDate)
+          .order('snapshot_date', { ascending: true })
+        const kpisList = (kpisData || []) as { id: string; metric_name: string; category: string | null }[]
+        const snaps = (snapData || []) as { metric_name: string; value: number; snapshot_date: string }[]
+        let growth: number | null = null
+        if (kpisList.length > 0 && snaps.length >= 2) {
+          const byMetric = new Map<string, { value: number; date: string }[]>()
+          for (const s of snaps) {
+            if (!byMetric.has(s.metric_name)) byMetric.set(s.metric_name, [])
+            byMetric.get(s.metric_name)!.push({ value: s.value, date: s.snapshot_date })
+          }
+          for (const k of kpisList) {
+            const arr = byMetric.get(k.metric_name)
+            if (arr && arr.length >= 2) {
+              const first = arr[0].value
+              const last = arr[arr.length - 1].value
+              if (first !== 0 && typeof first === 'number' && typeof last === 'number') {
+                growth = Math.round(((last - first) / first) * 100)
+                break
+              }
+            }
+          }
+        }
+        setGrowthPercent(growth)
       } catch (e) {
         console.error(e)
       } finally {
@@ -242,6 +261,26 @@ export default function HomeDashboard() {
   const setTodoStatus = (id: string, status: TodoStatus) => {
     const completedAt = status === 'completed' ? new Date().toISOString() : undefined
     saveTodos(todos.map((t) => (t.id === id ? { ...t, status, completedAt } : t)))
+  }
+
+  const saveUserQuickWins = (wins: UserQuickWin[]) => {
+    setUserQuickWins(wins)
+    if (typeof window !== 'undefined') localStorage.setItem(QUICK_WINS_KEY, JSON.stringify(wins))
+  }
+  const addUserQuickWin = () => {
+    const title = newQuickWinTitle.trim()
+    if (!title) return
+    const win: UserQuickWin = { id: Date.now().toString(), title, addedAt: new Date().toISOString() }
+    saveUserQuickWins([...userQuickWins, win])
+    setNewQuickWinTitle('')
+  }
+  const archiveQuickWin = (win: UserQuickWin) => {
+    const archived = { ...win, archivedAt: new Date().toISOString() }
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(WRAPPED_2026_KEY) : null
+    const wrapped: { id: string; title: string; addedAt: string; archivedAt: string }[] = raw ? JSON.parse(raw) : []
+    wrapped.unshift(archived)
+    if (typeof window !== 'undefined') localStorage.setItem(WRAPPED_2026_KEY, JSON.stringify(wrapped))
+    saveUserQuickWins(userQuickWins.filter((w) => w.id !== win.id))
   }
 
   const statCards = [
@@ -329,19 +368,47 @@ export default function HomeDashboard() {
           <h2 className="text-xl font-bold text-white mb-4">Quick Wins</h2>
           {loading ? (
             <p className="text-white/50">Loading…</p>
-          ) : quickWins.length === 0 ? (
-            <p className="text-white/50">Nothing due this week. Schedule content in the calendar.</p>
           ) : (
-            <ul className="space-y-2">
-              {quickWins.map((q) => (
-                <li key={q.id}>
-                  <Link href={q.href} className={`block p-3 rounded-lg transition-all ${q.isToday ? 'bg-violet-500/20 border border-violet-500/40' : 'hover:bg-white/10'}`}>
-                    <p className="text-white font-medium text-sm">{q.title}</p>
-                    <p className="text-white/50 text-xs">{q.isToday ? 'Today' : new Date(q.date).toLocaleDateString()}</p>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            <>
+              {growthPercent !== null && (
+                <Link href="/dashboard/analytics" className="block p-3 rounded-lg bg-violet-500/20 border border-violet-500/40 mb-3">
+                  <p className="text-white font-medium text-sm">📈 {growthPercent >= 0 ? '+' : ''}{growthPercent}% growth</p>
+                  <p className="text-white/50 text-xs">From Analytics (last 30 days)</p>
+                </Link>
+              )}
+              {userQuickWins.length === 0 && growthPercent === null && (
+                <p className="text-white/50 text-sm mb-3">Add a win below or track metrics in Analytics for growth %.</p>
+              )}
+              <ul className="space-y-2 mb-4">
+                {userQuickWins.map((q) => (
+                  <li key={q.id} className="flex items-center justify-between gap-2 p-3 rounded-lg bg-white/5 group">
+                    <span className="text-white font-medium text-sm flex-1">{q.title}</span>
+                    <button
+                      onClick={() => archiveQuickWin(q)}
+                      className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs rounded-lg bg-violet-500/30 text-violet-200 hover:bg-violet-500/50 transition-all"
+                    >
+                      Archive
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newQuickWinTitle}
+                  onChange={(e) => setNewQuickWinTitle(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addUserQuickWin()}
+                  placeholder="Add a win..."
+                  className="flex-1 px-3 py-2 bg-black/30 border border-white/20 rounded-lg text-white placeholder:text-white/40 text-sm"
+                />
+                <button
+                  onClick={addUserQuickWin}
+                  className="px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-600 rounded-lg font-semibold text-white text-sm hover:scale-105 transition-all"
+                >
+                  Add
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
