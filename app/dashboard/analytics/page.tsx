@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import EmptyState from '@/app/components/EmptyState'
 import ConfirmDialog from '@/app/components/ConfirmDialog'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 type Kpi = {
   id: string
@@ -19,6 +20,11 @@ type Kpi = {
 const CATEGORIES = ['growth', 'engagement', 'partnership', 'fundraising', 'product']
 const UNITS = ['count', 'percentage', 'dollars', 'days']
 
+type Period = 'month' | 'quarter' | 'year'
+const PERIOD_DAYS: Record<Period, number> = { month: 30, quarter: 90, year: 365 }
+
+const CHART_COLORS = ['#8B5CF6', '#EC4899', '#3B82F6', '#10B981', '#F59E0B']
+
 export default function AnalyticsPage() {
   const [kpis, setKpis] = useState<Kpi[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,6 +35,8 @@ export default function AnalyticsPage() {
   const [logModal, setLogModal] = useState<Kpi | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Kpi | null>(null)
   const [saving, setSaving] = useState(false)
+  const [chartPeriod, setChartPeriod] = useState<Period>('quarter')
+  const [snapshots, setSnapshots] = useState<{ metric_name: string; value: number; snapshot_date: string }[]>([])
   const supabase = createClient()
 
   const loadKpis = async () => {
@@ -36,16 +44,36 @@ export default function AnalyticsPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data, error } = await supabase
-        .from('kpis')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('metric_name')
-      if (error) throw error
-      setKpis((data as Kpi[]) || [])
+      const [kpisRes, snapRes] = await Promise.all([
+        supabase.from('kpis').select('*').eq('user_id', user.id).order('metric_name'),
+        supabase.from('kpi_snapshots').select('metric_name, value, snapshot_date').eq('user_id', user.id).order('snapshot_date', { ascending: true }),
+      ])
+      if (kpisRes.error) throw kpisRes.error
+      const kpisData = (kpisRes.data as Kpi[]) || []
+      let snapData = snapRes.error ? [] : (snapRes.data as { metric_name: string; value: number; snapshot_date: string }[]) || []
+      if (kpisData.length > 0 && snapData.length === 0) {
+        try {
+          const today = new Date().toISOString().slice(0, 10)
+          for (const k of kpisData) {
+            await supabase.from('kpi_snapshots').insert({
+              user_id: user.id,
+              metric_name: k.metric_name,
+              value: k.current_value,
+              snapshot_date: k.tracked_date || today,
+            })
+          }
+          const { data: refetch } = await supabase.from('kpi_snapshots').select('metric_name, value, snapshot_date').eq('user_id', user.id).order('snapshot_date', { ascending: true })
+          snapData = (refetch as { metric_name: string; value: number; snapshot_date: string }[]) || []
+        } catch (_) {
+          // kpi_snapshots table may not exist yet; run supabase/kpi_snapshots_schema.sql
+        }
+      }
+      setKpis(kpisData)
+      setSnapshots(snapData)
     } catch (e) {
       console.error(e)
       setKpis([])
+      setSnapshots([])
     } finally {
       setLoading(false)
     }
@@ -62,6 +90,35 @@ export default function AnalyticsPage() {
       if (sort === 'value') return b.current_value - a.current_value
       return (b.tracked_date || '').localeCompare(a.tracked_date || '')
     })
+
+  const chartData = useMemo(() => {
+    const days = PERIOD_DAYS[chartPeriod]
+    const cut = new Date()
+    cut.setDate(cut.getDate() - days)
+    const start = cut.toISOString().slice(0, 10)
+    const byDate = new Map<string, Record<string, number>>()
+    for (const s of snapshots) {
+      if (s.snapshot_date < start) continue
+      const key = s.snapshot_date
+      const safeName = s.metric_name.replace(/\s+/g, '_')
+      if (!byDate.has(key)) byDate.set(key, { date: key })
+      byDate.get(key)![safeName] = Number(s.value)
+    }
+    const sorted = [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v)
+    return sorted
+  }, [snapshots, chartPeriod])
+
+  const chartMetrics = useMemo(() => {
+    const days = PERIOD_DAYS[chartPeriod]
+    const cut = new Date()
+    cut.setDate(cut.getDate() - days)
+    const start = cut.toISOString().slice(0, 10)
+    const set = new Set<string>()
+    for (const s of snapshots) {
+      if (s.snapshot_date >= start) set.add(s.metric_name.replace(/\s+/g, '_'))
+    }
+    return [...set]
+  }, [snapshots, chartPeriod])
 
   const handleSave = async (form: Partial<Kpi>) => {
     setSaving(true)
@@ -85,6 +142,12 @@ export default function AnalyticsPage() {
         const { error } = await supabase.from('kpis').insert(payload)
         if (error) throw error
       }
+      await supabase.from('kpi_snapshots').insert({
+        user_id: user.id,
+        metric_name: payload.metric_name,
+        value: payload.current_value,
+        snapshot_date: payload.tracked_date,
+      })
       setModalOpen(false)
       setEditing(null)
       loadKpis()
@@ -97,10 +160,20 @@ export default function AnalyticsPage() {
 
   const handleLogValue = async (kpiId: string, value: number, date: string) => {
     try {
+      const kpi = kpis.find((k) => k.id === kpiId)
       await supabase.from('kpis').update({
         current_value: value,
         tracked_date: date,
       }).eq('id', kpiId)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user && kpi) {
+        await supabase.from('kpi_snapshots').insert({
+          user_id: user.id,
+          metric_name: kpi.metric_name,
+          value,
+          snapshot_date: date,
+        })
+      }
       setLogModal(null)
       loadKpis()
     } catch (e) {
@@ -126,6 +199,46 @@ export default function AnalyticsPage() {
         <button onClick={() => { setEditing(null); setModalOpen(true); }} className="glass-button px-4 py-2">
           Track your first metric
         </button>
+      </div>
+
+      <div className="glass-card p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <h2 className="text-xl font-bold text-white">Growth over time</h2>
+          <div className="flex gap-2">
+            {(['month', 'quarter', 'year'] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setChartPeriod(p)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  chartPeriod === p ? 'bg-chromara-purple text-white' : 'bg-white/10 text-white/80 hover:bg-white/20'
+                }`}
+              >
+                {p === 'month' ? 'Month' : p === 'quarter' ? 'Quarter' : 'Year'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="text-white/60 text-sm mb-4">Updates automatically when you save or log KPI values on this page or the Marketing dashboard.</p>
+        {chartData.length === 0 ? (
+          <div className="h-64 flex items-center justify-center text-white/50 rounded-lg bg-white/5">
+            No history yet. Save or log KPI values to see growth over time.
+          </div>
+        ) : (
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                <XAxis dataKey="date" stroke="rgba(255,255,255,0.6)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} tickFormatter={(v) => new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} />
+                <YAxis stroke="rgba(255,255,255,0.6)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8 }} labelFormatter={(v) => new Date(v).toLocaleDateString()} />
+                <Legend wrapperStyle={{ fontSize: 12 }} formatter={(value) => value.replace(/_/g, ' ')} />
+                {chartMetrics.map((metric, i) => (
+                  <Line key={metric} type="monotone" dataKey={metric} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} name={metric.replace(/_/g, ' ')} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-4 flex-wrap">

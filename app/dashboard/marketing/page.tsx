@@ -112,6 +112,16 @@ export default function MarketingDashboard() {
         } else {
           await supabase.from('kpis').insert(payload)
         }
+        try {
+          await supabase.from('kpi_snapshots').insert({
+            user_id: user.id,
+            metric_name: k.metric_name,
+            value: k.current_value,
+            snapshot_date: payload.tracked_date,
+          })
+        } catch (_) {
+          // kpi_snapshots may not exist yet
+        }
       }
       setEditingQuickStats(false)
       loadData()
