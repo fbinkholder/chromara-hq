@@ -4,7 +4,14 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
-type TodoItem = { id: string; text: string; done: boolean }
+export type TodoStatus = 'not_started' | 'in_progress' | 'completed'
+export type TodoItem = {
+  id: string
+  text: string
+  done?: boolean // legacy
+  status?: TodoStatus
+  completedAt?: string // ISO date when status set to completed
+}
 
 type ActivityItem = {
   id: string
@@ -117,7 +124,21 @@ export default function HomeDashboard() {
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? localStorage.getItem('chromara-todos') : null
-    if (saved) try { setTodos(JSON.parse(saved)); } catch (_) {}
+    if (saved) {
+      try {
+        const raw = JSON.parse(saved) as TodoItem[]
+        const normalized = raw.map((t) => {
+          const status: TodoStatus = t.status ?? (t.done ? 'completed' : 'not_started')
+          return {
+            id: t.id,
+            text: t.text,
+            status,
+            completedAt: t.completedAt ?? (t.done ? new Date().toISOString().slice(0, 10) : undefined),
+          }
+        })
+        setTodos(normalized)
+      } catch (_) {}
+    }
   }, [])
 
   useEffect(() => {
@@ -215,6 +236,12 @@ export default function HomeDashboard() {
   const saveTodos = (newTodos: TodoItem[]) => {
     setTodos(newTodos)
     if (typeof window !== 'undefined') localStorage.setItem('chromara-todos', JSON.stringify(newTodos))
+  }
+
+  const activeTodos = todos.filter((t) => (t.status ?? (t.done ? 'completed' : 'not_started')) !== 'completed')
+  const setTodoStatus = (id: string, status: TodoStatus) => {
+    const completedAt = status === 'completed' ? new Date().toISOString() : undefined
+    saveTodos(todos.map((t) => (t.id === id ? { ...t, status, completedAt } : t)))
   }
 
   const statCards = [
@@ -352,20 +379,26 @@ export default function HomeDashboard() {
       <div className="rounded-2xl border border-violet-500/20 bg-white/5 backdrop-blur-sm p-6">
         <h2 className="text-xl font-bold text-white mb-4">📝 To-Do</h2>
         <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
-          {todos.map((todo) => (
-            <div key={todo.id} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg group">
-              <input
-                type="checkbox"
-                checked={todo.done}
-                onChange={() => saveTodos(todos.map((t) => (t.id === todo.id ? { ...t, done: !t.done } : t)))}
-                className="w-5 h-5 rounded border-2 border-white/40 checked:bg-violet-500 checked:border-violet-500 cursor-pointer"
-              />
-              <span className={`flex-1 ${todo.done ? 'line-through text-white/40' : 'text-white'}`}>{todo.text}</span>
-              <button onClick={() => saveTodos(todos.filter((t) => t.id !== todo.id))} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-sm">
-                ✕
-              </button>
-            </div>
-          ))}
+          {activeTodos.map((todo) => {
+            const status = (todo.status ?? (todo.done ? 'completed' : 'not_started')) as TodoStatus
+            return (
+              <div key={todo.id} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg group">
+                <span className="flex-1 text-white">{todo.text}</span>
+                <select
+                  value={status}
+                  onChange={(e) => setTodoStatus(todo.id, e.target.value as TodoStatus)}
+                  className="px-2 py-1 rounded-lg bg-black/30 border border-white/20 text-white text-sm cursor-pointer"
+                >
+                  <option value="not_started">Not started</option>
+                  <option value="in_progress">In progress</option>
+                  <option value="completed">Completed</option>
+                </select>
+                <button onClick={() => saveTodos(todos.filter((t) => t.id !== todo.id))} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-sm">
+                  ✕
+                </button>
+              </div>
+            )
+          })}
         </div>
         <div className="flex gap-2">
           <input
@@ -374,7 +407,7 @@ export default function HomeDashboard() {
             onChange={(e) => setNewTodo(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && newTodo.trim()) {
-                saveTodos([...todos, { id: Date.now().toString(), text: newTodo.trim(), done: false }])
+                saveTodos([...todos, { id: Date.now().toString(), text: newTodo.trim(), status: 'not_started' }])
                 setNewTodo('')
               }
             }}
@@ -384,7 +417,7 @@ export default function HomeDashboard() {
           <button
             onClick={() => {
               if (newTodo.trim()) {
-                saveTodos([...todos, { id: Date.now().toString(), text: newTodo.trim(), done: false }])
+                saveTodos([...todos, { id: Date.now().toString(), text: newTodo.trim(), status: 'not_started' }])
                 setNewTodo('')
               }
             }}

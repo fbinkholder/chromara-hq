@@ -98,7 +98,14 @@ const navigation: NavItem[] = [
   },
   { name: 'Agents', href: '/dashboard/agents', icon: Bot },
   { name: 'Reference', href: '/dashboard/reference', icon: BookOpen },
-  { name: 'Personal', href: '/dashboard/personal', icon: Brain },
+  {
+    name: 'Personal',
+    href: '/dashboard/personal',
+    icon: Brain,
+    subPages: [
+      { name: 'Archives', href: '/dashboard/personal/archives' },
+    ]
+  },
   { name: 'Brand', href: '/dashboard/brand', icon: Palette },
 ]
 
