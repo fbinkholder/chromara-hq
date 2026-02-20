@@ -120,9 +120,7 @@ export default function DashboardLayout({
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(() =>
-    new Set(navigation.filter(n => n.subPages?.length).map(n => n.name))
-  )
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
   const supabase = createClient()
 
   useEffect(() => {
