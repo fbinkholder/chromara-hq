@@ -24,7 +24,7 @@ type ActivityItem = {
 
 export type UserQuickWin = { id: string; title: string; addedAt: string }
 const QUICK_WINS_KEY = 'chromara-quick-wins'
-export const WRAPPED_2026_KEY = 'chromara-wrapped-2026'
+const WRAPPED_2026_KEY = 'chromara-wrapped-2026'
 
 export default function HomeDashboard() {
   const [todos, setTodos] = useState<TodoItem[]>([])
