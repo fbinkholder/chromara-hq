@@ -120,7 +120,9 @@ export default function DashboardLayout({
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(() =>
+    new Set(navigation.filter(n => n.subPages?.length).map(n => n.name))
+  )
   const supabase = createClient()
 
   useEffect(() => {
@@ -128,11 +130,12 @@ export default function DashboardLayout({
   }, [])
 
   useEffect(() => {
-    // Auto-expand section if on a sub-page
+    // Auto-expand section if on that section's page (including parent or any sub-page)
     navigation.forEach(item => {
       if (item.subPages) {
         const isSubPageActive = item.subPages.some(sub => pathname === sub.href)
-        if (isSubPageActive) {
+        const isOnParentOrChild = pathname === item.href || pathname.startsWith(item.href + '/')
+        if (isSubPageActive || isOnParentOrChild) {
           setExpandedSections(prev => new Set(prev).add(item.name))
         }
       }
@@ -225,6 +228,7 @@ export default function DashboardLayout({
                 <div className="flex items-center gap-1">
                   <a
                     href={item.href}
+                    onClick={() => hasSubPages && setExpandedSections(prev => new Set(prev).add(item.name))}
                     className={`sidebar-item flex-1 ${isActive || isSubPageActive ? 'active' : ''}`}
                   >
                     {typeof Icon === 'function' ? <Icon className="w-5 h-5" /> : <span className="w-5 h-5 block" />}
