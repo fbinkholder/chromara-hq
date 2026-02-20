@@ -96,7 +96,7 @@ export default function AnalyticsPage() {
     const cut = new Date()
     cut.setDate(cut.getDate() - days)
     const start = cut.toISOString().slice(0, 10)
-    const byDate = new Map<string, Record<string, number>>()
+    const byDate = new Map<string, Record<string, string | number>>()
     for (const s of snapshots) {
       if (s.snapshot_date < start) continue
       const key = s.snapshot_date
