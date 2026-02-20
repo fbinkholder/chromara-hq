@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -36,4 +38,45 @@
   select.glass-input {
     @apply appearance-none cursor-pointer;
   }
+
+  .font-jetbrains {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+}
+
+@keyframes wave-scaling {
+  0%, 100% { transform: scaleY(0.5); opacity: 0.6; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+@keyframes wave-at-risk {
+  0%, 100% { transform: scaleY(0.7); opacity: 0.5; }
+  50% { transform: scaleY(0.9); opacity: 0.8; }
+}
+
+@keyframes light-leak-slide {
+  0% { background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes aura-shift {
+  0%, 100% { opacity: 0.6; transform: scale(1) rotate(0deg); }
+  33% { opacity: 0.8; transform: scale(1.1) rotate(2deg); }
+  66% { opacity: 0.5; transform: scale(0.95) rotate(-1deg); }
+}
+
+@keyframes orb-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; box-shadow: 0 0 12px rgba(140,82,255,0.6); }
+  50% { transform: scale(1.15); opacity: 1; box-shadow: 0 0 24px rgba(140,82,255,0.9); }
+}
+
+@keyframes border-ignite {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.strategies-grain {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+  pointer-events: none;
 }

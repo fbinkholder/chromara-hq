@@ -18,7 +18,11 @@ type PlatformStrategy = {
   goals: Record<string, number> | null
   strategy_notes: string | null
   examples: string | null
+  status?: 'active' | 'testing' | 'paused'
+  category?: string | string[]
 }
+
+type StrategyStatus = 'active' | 'testing' | 'paused'
 
 const PLATFORMS = ['twitter', 'linkedin', 'tiktok', 'pinterest', 'blog', 'email']
 const PLATFORM_ICONS: Record<string, string> = {
@@ -30,6 +34,17 @@ const PLATFORM_ICONS: Record<string, string> = {
   email: '📧',
 }
 const POSTING_FREQUENCIES = ['daily', '3x_week', 'weekly', 'bi_weekly']
+
+function FloatingPulsingOrb({ status }: { status: StrategyStatus; id: string }) {
+  if (status === 'paused') return <div className="w-2.5 h-2.5 rounded-full bg-[#503A6A]/60" />
+  return (
+    <div
+      className="w-3 h-3 rounded-full animate-[orb-pulse_2s_ease-in-out_infinite]"
+      style={{ backgroundColor: '#8C52FF', boxShadow: '0 0 12px rgba(140,82,255,0.6)' }}
+    />
+  )
+}
+
 const BEST_TIMES = ['6am', '9am', '12pm', '3pm', '5pm', '7pm', '9pm']
 const CONTENT_FORMATS = ['carousel', 'video', 'text_post', 'article', 'story', 'reel']
 const KEY_METRICS = ['engagement_rate', 'follower_growth', 'waitlist_signups', 'website_clicks', 'reach']
@@ -41,7 +56,15 @@ export default function PlatformStrategiesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingStrategy, setEditingStrategy] = useState<PlatformStrategy | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<PlatformStrategy | null>(null)
+  const [cursorPos, setCursorPos] = useState({ x: 50, y: 50, px: 500, py: 400 })
   const supabase = createClient()
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = ((e.clientX - rect.left) / rect.width) * 100
+    const y = ((e.clientY - rect.top) / rect.height) * 100
+    setCursorPos({ x, y, px: e.clientX, py: e.clientY })
+  }
 
   const loadStrategies = async () => {
     setLoading(true)
@@ -101,146 +124,238 @@ export default function PlatformStrategiesPage() {
     setShowModal(true)
   }
 
+  const getStatus = (s: PlatformStrategy | undefined): StrategyStatus => {
+    if (!s) return 'paused'
+    return (s.status as StrategyStatus) || 'active'
+  }
+  const getCategories = (s: PlatformStrategy | undefined, platform: string): string[] => {
+    if (s?.content_pillars?.length) return s.content_pillars.slice(0, 4)
+    const defaults: Record<string, string> = {
+      twitter: 'SOCIAL',
+      linkedin: 'B2B',
+      tiktok: 'DTC',
+      pinterest: 'DTC',
+      blog: 'B2B',
+      email: 'B2B',
+    }
+    return [defaults[platform] || 'SOCIAL']
+  }
+
+  const roiProgress = (s: PlatformStrategy | undefined) => {
+    if (!s?.current_stats || !s?.goals || Object.keys(s.goals).length === 0) return 0.45
+    const pct = Object.keys(s.goals).slice(0, 3).reduce((sum, k) => {
+      const curr = (s.current_stats ?? {})[k] ?? 0
+      const goal = (s.goals ?? {})[k] || 1
+      return sum + (curr / goal) * 100
+    }, 0) / Math.min(3, Object.keys(s.goals).length)
+    return Math.min(1, pct / 100)
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-violet-400 to-chromara-lilac bg-clip-text text-transparent">
-            Platform Strategies
-          </h1>
-          <p className="text-white/60 mt-2">Your content playbook for each channel</p>
-        </div>
-        <button
-          onClick={() => {
-            setEditingStrategy(null)
-            setShowModal(true)
-          }}
-          className="glass-button px-6 py-3"
+    <div
+      className="min-h-screen -m-6 -mb-0 p-6 lg:p-8 relative overflow-hidden"
+      style={{ backgroundColor: '#050505' }}
+      onMouseMove={handleMouseMove}
+    >
+      {/* Full-screen Aura: shifting Chromara Purple + Lilac, backlit gemstone */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0 blur-3xl animate-[aura-shift_12s_ease-in-out_infinite]"
+        style={{
+          background: `
+            radial-gradient(ellipse 80% 80% at 20% 30%, rgba(140,82,255,0.15) 0%, transparent 50%),
+            radial-gradient(ellipse 70% 70% at 80% 70%, rgba(200,182,226,0.12) 0%, transparent 50%),
+            radial-gradient(ellipse 60% 60% at 50% 50%, rgba(140,82,255,0.08) 0%, transparent 60%)
+          `,
+        }}
+      />
+
+      {/* Nova Cursor: soft Lilac follow-light illuminating the page */}
+      <div
+        className="pointer-events-none fixed z-[100] w-[32rem] h-[32rem] -translate-x-1/2 -translate-y-1/2 rounded-full transition-[left,top] duration-100 ease-out"
+        style={{
+          left: cursorPos.px || 0,
+          top: cursorPos.py || 0,
+          background: 'radial-gradient(circle, rgba(200,182,226,0.14) 0%, rgba(140,82,255,0.05) 35%, transparent 70%)',
+        }}
+      />
+      <div
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{
+          background: `radial-gradient(circle 400px at ${cursorPos.x}% ${cursorPos.y}%, rgba(200,182,226,0.08) 0%, transparent 50%)`,
+        }}
+      />
+
+      {/* Grain overlay - satin texture */}
+      <div className="strategies-grain fixed inset-0 z-[1] opacity-[0.035]" />
+
+      {/* North Star - massive behind content */}
+      <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 z-0 pointer-events-none select-none">
+        <span
+          className="block text-[8rem] md:text-[12rem] font-thin text-[#CBCBC0]/10 whitespace-nowrap"
+          style={{ fontFamily: 'Georgia, serif' }}
         >
-          Add Strategy
-        </button>
+          TARGET: $2M ARR
+        </span>
+      </div>
+
+      {/* Pinned header - Executive Monolith */}
+      <div className="sticky top-0 z-20 -mx-6 -mt-6 px-6 pt-6 pb-4 lg:-mx-8 lg:-mt-8 lg:px-8 lg:pt-8 bg-[#050505]/90 backdrop-blur-xl border-b border-white/5 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+          <div>
+            <h1
+              className="text-2xl md:text-3xl font-light uppercase bg-clip-text text-transparent bg-gradient-to-r from-[#C4B5FD] via-[#A855F7] to-[#503A6A]"
+              style={{ letterSpacing: '0.4em' }}
+            >
+              Platform Strategies
+            </h1>
+            <p className="text-[#503A6A]/80 text-sm mt-1 font-light tracking-wide">
+              Primary GTM objective: scale channel-led growth across social & content
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setEditingStrategy(null)
+              setShowModal(true)
+            }}
+            className="border border-[#CBCBC0]/60 text-[#CBCBC0] bg-transparent px-6 py-3 rounded-lg text-sm font-medium tracking-wide hover:bg-[#8C52FF] hover:border-[#8C52FF] hover:text-white transition-all shrink-0"
+          >
+            Add Strategy
+          </button>
+        </div>
       </div>
 
       {loading ? (
-        <div className="text-white/50 py-12 text-center">Loading…</div>
+        <div className="text-[#503A6A]/80 py-12 text-center font-jetbrains text-sm relative z-10">Loading…</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
           {PLATFORMS.map((platform) => {
             const strategy = strategies.find((s) => s.platform === platform)
+            const status = getStatus(strategy)
+            const categories = getCategories(strategy, platform)
+            const isSelected = selectedStrategy?.id === strategy?.id
+            const progress = roiProgress(strategy)
+
             return (
               <div
                 key={platform}
                 onClick={() => strategy && setSelectedStrategy(strategy)}
-                className={`glass-card p-6 transition-all cursor-pointer group ${
-                  strategy ? 'hover:border-chromara-purple/50' : ''
-                } ${selectedStrategy?.id === strategy?.id ? 'ring-2 ring-chromara-purple' : ''}`}
+                className={`
+                  relative overflow-hidden rounded-xl p-6 cursor-pointer group
+                  bg-[rgba(200,182,226,0.05)] backdrop-blur-[60px]
+                  transition-all duration-300
+                  drop-shadow-[0_0_30px_rgba(140,82,255,0.15)]
+                  hover:bg-[rgba(200,182,226,0.09)] group-hover:drop-shadow-[0_0_40px_rgba(140,82,255,0.2)]
+                  ${strategy ? '' : 'opacity-90'}
+                  ${isSelected ? 'ring-1 ring-[#8C52FF]/60 drop-shadow-[0_0_40px_rgba(140,82,255,0.25)]' : ''}
+                `}
+                style={{
+                  border: '1px solid transparent',
+                  backgroundImage: 'linear-gradient(rgba(200,182,226,0.05), rgba(200,182,226,0.05)), linear-gradient(135deg, #8C52FF, #C8B6E2, transparent 80%)',
+                  backgroundOrigin: 'padding-box, border-box',
+                  backgroundClip: 'padding-box, border-box',
+                }}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <span className="text-4xl">{PLATFORM_ICONS[platform]}</span>
-                    <h3 className="text-xl font-bold text-white capitalize">{platform}</h3>
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{PLATFORM_ICONS[platform]}</span>
+                      <h3
+                        className="text-sm font-light text-[#C8B6E2] uppercase"
+                        style={{ letterSpacing: '0.4em' }}
+                      >
+                        {platform}
+                      </h3>
+                    </div>
+                    <FloatingPulsingOrb status={status} id={platform} />
                   </div>
-                  {strategy ? (
-                    <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">
-                      Active
-                    </span>
-                  ) : (
-                    <span className="px-3 py-1 bg-gray-500/20 text-gray-400 rounded-full text-xs">
-                      Not Set
-                    </span>
-                  )}
-                </div>
 
-                {strategy ? (
-                  <>
-                    <p className="text-white/80 mb-4">
-                      <strong>Objective:</strong>{' '}
-                      {strategy.objective || '—'}
-                    </p>
-                    {strategy.posting_frequency && (
-                      <p className="text-white/70 text-sm mb-2">
-                        📅 {strategy.posting_frequency.replace('_', ' ')}
+                  {/* Micro-glass pills - dimmed Deep Violet */}
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    {categories.map((cat) => (
+                      <span
+                        key={cat}
+                        className="px-2 py-0.5 rounded text-[10px] uppercase tracking-tighter text-[#503A6A]/90"
+                        style={{
+                          background: 'rgba(80,58,106,0.15)',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          boxShadow: 'inset 0 0 8px rgba(140,82,255,0.05)',
+                        }}
+                      >
+                        {typeof cat === 'string' ? cat.replace(/_/g, ' ') : cat}
+                      </span>
+                    ))}
+                  </div>
+
+                  {strategy ? (
+                    <>
+                      <p className="text-[#C8B6E2]/90 text-sm mb-3 leading-relaxed font-light">
+                        {strategy.objective || '—'}
                       </p>
-                    )}
-                    {strategy.content_pillars && strategy.content_pillars.length > 0 && (
-                      <div className="mb-4">
-                        <p className="text-white/60 text-sm mb-2">Content Pillars:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {strategy.content_pillars.slice(0, 3).map((pillar) => (
-                            <span
-                              key={pillar}
-                              className="px-2 py-1 bg-chromara-purple/20 text-chromara-lilac rounded text-xs"
-                            >
-                              {pillar.replace(/_/g, ' ')}
-                            </span>
-                          ))}
+                      {strategy.posting_frequency && (
+                        <p className="font-jetbrains text-xs text-[#503A6A]/70 mb-3">
+                          {strategy.posting_frequency.replace(/_/g, ' ')}
+                        </p>
+                      )}
+                      {strategy.current_stats && (
+                        <p className="font-jetbrains text-[10px] text-[#503A6A]/60 mb-3">
+                          {Object.entries(strategy.current_stats).slice(0, 2).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                        </p>
+                      )}
+
+                      {/* Burn/Value ratio bar */}
+                      <div className="mt-4 pt-4 border-t border-[#503A6A]/30">
+                        <div className="h-1 w-full bg-[#503A6A]/30 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-[#8C52FF] transition-all duration-500"
+                            style={{
+                              width: `${progress * 100}%`,
+                              boxShadow: '0 0 8px rgba(140,82,255,0.5)',
+                            }}
+                          />
                         </div>
+                        <p className="font-jetbrains text-[10px] text-[#503A6A]/70 mt-1">
+                          ROI Progress · {Math.round(progress * 100)}%
+                        </p>
                       </div>
-                    )}
-                    {strategy.current_stats && strategy.goals && (
-                      <div className="pt-4 border-t border-white/10">
-                        <div className="text-xs text-white/60 mb-2">Progress to Goals</div>
-                        {Object.keys(strategy.goals).slice(0, 3).map((metric) => (
-                          <div key={metric} className="mb-2">
-                            <div className="flex justify-between text-xs mb-1">
-                              <span className="text-white/70 capitalize">
-                                {metric.replace(/_/g, ' ')}
-                              </span>
-                              <span className="text-white/60">
-                                {(strategy.current_stats ?? {})[metric] ?? 0} / {(strategy.goals ?? {})[metric]}
-                              </span>
-                            </div>
-                            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-chromara-purple"
-                                style={{
-                                  width: `${Math.min(
-                                    100,
-                                    (((strategy.current_stats ?? {})[metric] ?? 0) / ((strategy.goals ?? {})[metric] || 1)) * 100
-                                  )}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))}
+
+                      <div className="flex gap-2 mt-4 pt-3 border-t border-[#503A6A]/30 opacity-0 group-hover:opacity-100 transition-all">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingStrategy(strategy)
+                            setShowModal(true)
+                          }}
+                          className="text-[#8C52FF] text-xs font-medium"
+                          style={{ textShadow: '0 0 10px rgba(140,82,255,0.5)' }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDeleteTarget(strategy)
+                          }}
+                          className="text-red-400/80 text-xs hover:text-red-300"
+                        >
+                          Delete
+                        </button>
                       </div>
-                    )}
-                    <div className="flex gap-2 mt-4 pt-3 border-t border-white/10 opacity-0 group-hover:opacity-100 transition-all">
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-[#503A6A]/70 text-sm mb-4 font-jetbrains">No strategy set</p>
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          setEditingStrategy(strategy)
-                          setShowModal(true)
+                          openCreateForPlatform(platform)
                         }}
-                        className="text-chromara-purple text-xs hover:text-chromara-lilac"
+                        className="border border-[#503A6A]/50 text-[#C8B6E2]/90 px-4 py-2 rounded-lg text-xs hover:bg-[#8C52FF]/20 hover:border-[#8C52FF]/50 transition-all"
                       >
-                        Edit
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDeleteTarget(strategy)
-                        }}
-                        className="text-red-400 text-xs hover:text-red-300"
-                      >
-                        Delete
+                        Create Strategy
                       </button>
                     </div>
-                  </>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-white/60 mb-4">No strategy set</p>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openCreateForPlatform(platform)
-                      }}
-                      className="glass-button px-4 py-2 text-sm"
-                    >
-                      Create Strategy
-                    </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )
           })}
@@ -409,6 +524,7 @@ function StrategyModal({
 }) {
   const [formData, setFormData] = useState({
     platform: strategy?.platform ?? 'twitter',
+    status: (strategy?.status as StrategyStatus) ?? 'active',
     objective: strategy?.objective ?? '',
     target_audience: strategy?.target_audience ?? '',
     content_pillars: (strategy?.content_pillars ?? []).join(', '),
@@ -477,6 +593,7 @@ function StrategyModal({
         goals,
         strategy_notes: formData.strategy_notes || null,
         examples: formData.examples || null,
+        status: formData.status || 'active',
         updated_at: new Date().toISOString(),
       }
       if (strategy?.id) {
@@ -507,6 +624,18 @@ function StrategyModal({
           {strategy?.id ? 'Edit Strategy' : 'Add Strategy'}
         </h3>
         <div className="space-y-4">
+          <div>
+            <label className="block text-sm text-white/80 mb-1">Status</label>
+            <select
+              value={formData.status}
+              onChange={(e) => setFormData((p) => ({ ...p, status: e.target.value as StrategyStatus }))}
+              className="glass-input w-full"
+            >
+              <option value="active">Active / Scaling</option>
+              <option value="testing">Testing</option>
+              <option value="paused">Paused</option>
+            </select>
+          </div>
           <div>
             <label className="block text-sm text-white/80 mb-1">Platform *</label>
             <select
