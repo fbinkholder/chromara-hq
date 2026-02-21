@@ -472,6 +472,15 @@ export default function OutreachAgentPage() {
           onClick={() => window.location.href = '/dashboard/agents/market-intel'}
         />
         <FeatureCard
+          icon="📋"
+          title="Scrape History"
+          description="View log of all Market Intel scrape runs and results"
+          badge="Log"
+          badgeColor="from-slate-500 to-slate-600"
+          comingSoon={false}
+          onClick={() => window.location.href = '/dashboard/agents/scrape-history'}
+        />
+        <FeatureCard
           icon="📄"
           title="Patent Tracker"
           description="Monitor USPTO filings for competitors"

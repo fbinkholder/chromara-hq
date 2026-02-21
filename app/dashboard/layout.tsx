@@ -96,7 +96,15 @@ const navigation: NavItem[] = [
       { name: 'Content Review', href: '/dashboard/ops/content-review' },
     ]
   },
-  { name: 'Agents', href: '/dashboard/agents', icon: Bot },
+  {
+    name: 'Agents',
+    href: '/dashboard/agents',
+    icon: Bot,
+    subPages: [
+      { name: 'Scrape History', href: '/dashboard/agents/scrape-history' },
+      { name: 'Market Intel', href: '/dashboard/agents/market-intel' },
+    ],
+  },
   { name: 'Reference', href: '/dashboard/reference', icon: BookOpen },
   {
     name: 'Personal',

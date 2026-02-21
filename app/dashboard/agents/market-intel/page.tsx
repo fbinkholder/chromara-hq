@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
 type Insight = {
@@ -101,7 +102,11 @@ export default function MarketIntelPage() {
           ))}
         </div>
         <p className="text-white/40 text-sm mt-3">
-          <strong>Competitors</strong> and <strong>Trends</strong> use Firecrawl — add <code className="bg-black/30 px-1 rounded">FIRECRAWL_API_KEY</code> to <code className="bg-black/30 px-1 rounded">.env.local</code> (and Vercel env if deployed). Add <code className="bg-black/30 px-1 rounded">SUPABASE_SERVICE_ROLE_KEY</code> so scraped results save reliably and appear on Agent Intel. SEO and Consumer are placeholders.
+          All four scrapes use Firecrawl — add <code className="bg-black/30 px-1 rounded">FIRECRAWL_API_KEY</code> to <code className="bg-black/30 px-1 rounded">.env.local</code>. Add <code className="bg-black/30 px-1 rounded">SUPABASE_SERVICE_ROLE_KEY</code> for reliable saves. Runs are logged in{' '}
+          <Link href="/dashboard/agents/scrape-history" className="text-chromara-purple hover:underline">
+            Scrape History
+          </Link>
+          .
         </p>
       </div>
 

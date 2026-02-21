@@ -10,6 +10,7 @@ const COMPETITOR_URLS = [
 const FIRECRAWL_SCRAPE = 'https://api.firecrawl.dev/v1/scrape'
 
 export async function POST() {
+  let activityId: string | null = null
   try {
     const supabase = createServerSupabase()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -28,9 +29,15 @@ export async function POST() {
     let db = supabase
     try {
       db = createAdminSupabase()
-    } catch {
-      // Fallback to session client if service role not configured
-    }
+    } catch {}
+
+    const { data: activity } = await db.from('agent_activity').insert({
+      user_id: user.id,
+      agent_name: 'Market Intel: Competitors',
+      status: 'running',
+    }).select('id').single()
+    activityId = activity?.id ?? null
+
     let saved = 0
     for (const { name, url } of COMPETITOR_URLS) {
       try {
@@ -73,6 +80,14 @@ export async function POST() {
       }
     }
 
+    if (activityId) {
+      await db.from('agent_activity').update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        results_summary: { count: saved, message: `Saved ${saved} competitor insight(s).` },
+      }).eq('id', activityId)
+    }
+
     return NextResponse.json({
       ok: true,
       message: saved > 0 ? `Saved ${saved} competitor insight(s).` : 'No new insights saved.',
@@ -80,6 +95,16 @@ export async function POST() {
     })
   } catch (e) {
     console.error('scrape/competitors:', e)
+    if (activityId) {
+      try {
+        const db = createAdminSupabase()
+        await db.from('agent_activity').update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: String(e),
+        }).eq('id', activityId)
+      } catch (_) {}
+    }
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
 }
