@@ -45,6 +45,7 @@ export default function PartnershipsPage() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'list' | 'pipeline'>('list')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPriority, setFilterPriority] = useState<string>('all')
@@ -86,6 +87,7 @@ export default function PartnershipsPage() {
         })
         .eq('id', contactId)
       if (error) throw error
+      setSelectedContact((prev) => prev?.id === contactId ? { ...prev, status: newStatus } : prev)
       loadContacts()
     } catch (error) {
       console.error('Error updating status:', error)
@@ -237,9 +239,9 @@ export default function PartnershipsPage() {
 
       {/* Contact List or Pipeline */}
       {view === 'list' ? (
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {filteredContacts.length === 0 ? (
-            <div className="glass-card p-12 text-center">
+            <div className="col-span-full glass-card p-12 text-center">
               <div className="text-6xl mb-4">🤝</div>
               <h3 className="text-xl font-semibold text-white mb-2">No contacts yet</h3>
               <p className="text-white/60 mb-4">Add your first partnership contact to get started</p>
@@ -249,12 +251,25 @@ export default function PartnershipsPage() {
             </div>
           ) : (
             filteredContacts.map((contact) => (
-              <ContactCard key={contact.id} contact={contact} onUpdate={loadContacts} onStatusChange={updateContactStatus} />
+              <CompactContactCard
+                key={contact.id}
+                contact={contact}
+                onClick={() => setSelectedContact(contact)}
+              />
             ))
           )}
         </div>
       ) : (
         <PipelineView contacts={filteredContacts} onUpdate={loadContacts} onStatusChange={updateContactStatus} />
+      )}
+
+      {/* Contact Detail Modal */}
+      {selectedContact && (
+        <ContactDetailModal
+          contact={selectedContact}
+          onClose={() => setSelectedContact(null)}
+          onStatusChange={updateContactStatus}
+        />
       )}
 
       {/* Add Contact Modal */}
@@ -286,58 +301,111 @@ const STATUS_OPTIONS: { value: Contact['status']; label: string }[] = [
   { value: 'moving_forward', label: 'Moving forward' },
 ]
 
-function ContactCard({ contact, onUpdate, onStatusChange }: { contact: Contact; onUpdate: () => void; onStatusChange: (id: string, status: Contact['status']) => void }) {
+function CompactContactCard({ contact, onClick }: { contact: Contact; onClick: () => void }) {
+  const statusLabel = STATUS_OPTIONS.find(o => o.value === contact.status)?.label ?? contact.status
   return (
-    <div className="glass-card p-4 hover:scale-[1.01] transition-all cursor-pointer">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-1">
-            <h3 className="text-lg font-semibold text-white">{contact.company}</h3>
-            <span className={`text-2xl ${priorityColors[contact.priority]}`}>
-              {contact.priority === 'high' ? '🔴' : contact.priority === 'medium' ? '🟡' : '🟢'}
-            </span>
+    <button
+      type="button"
+      onClick={onClick}
+      className="glass-card p-4 aspect-square min-h-[140px] flex flex-col items-start justify-between text-left hover:scale-[1.02] hover:border-chromara-purple/50 transition-all cursor-pointer border border-transparent"
+    >
+      <div className="w-full">
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <span className={`text-lg ${priorityColors[contact.priority]}`}>
+            {contact.priority === 'high' ? '🔴' : contact.priority === 'medium' ? '🟡' : '🟢'}
+          </span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium truncate max-w-[100px] ${statusColors[contact.status]}`}>
+            {statusLabel}
+          </span>
+        </div>
+        <h3 className="font-semibold text-white text-sm leading-tight line-clamp-2">{contact.company}</h3>
+        <p className="text-xs text-white/60 mt-0.5 truncate">{contact.contact_name}</p>
+      </div>
+      <p className="text-[10px] text-white/50 truncate w-full">{contact.segment}</p>
+    </button>
+  )
+}
+
+function ContactDetailModal({ contact, onClose, onStatusChange }: { contact: Contact; onClose: () => void; onStatusChange: (id: string, status: Contact['status']) => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="glass-card max-w-xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-xl font-bold text-white">{contact.company}</h2>
+                <span className={`text-xl ${priorityColors[contact.priority]}`}>
+                  {contact.priority === 'high' ? '🔴' : contact.priority === 'medium' ? '🟡' : '🟢'}
+                </span>
+              </div>
+              <p className="text-white/80">{contact.contact_name} • {contact.title}</p>
+              <p className="text-sm text-white/60">{contact.segment}</p>
+            </div>
+            <button onClick={onClose} className="text-white/60 hover:text-white text-2xl p-1">✕</button>
           </div>
-          <p className="text-white/80">{contact.contact_name} • {contact.title}</p>
-          <p className="text-sm text-white/60">{contact.segment}</p>
+
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1">Status</label>
+              <select
+                value={contact.status}
+                onChange={(e) => onStatusChange(contact.id, e.target.value as Contact['status'])}
+                className={`w-full px-3 py-2 rounded-lg text-sm font-medium border-0 bg-white/10 text-white ${statusColors[contact.status]}`}
+              >
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value} className="bg-gray-900 text-white">
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {contact.email && (
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1">Email</label>
+                <a href={`mailto:${contact.email}`} className="text-chromara-pink hover:underline block truncate">
+                  {contact.email}
+                </a>
+              </div>
+            )}
+
+            {contact.linkedin_url && (
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1">LinkedIn</label>
+                <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-chromara-purple hover:underline block truncate">
+                  {contact.linkedin_url}
+                </a>
+              </div>
+            )}
+
+            {contact.notes && (
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1">Notes</label>
+                <p className="text-sm text-white/80 bg-white/5 p-3 rounded-lg">{contact.notes}</p>
+              </div>
+            )}
+
+            {contact.next_followup && (
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1">Next follow-up</label>
+                <p className="text-sm text-white/80">{new Date(contact.next_followup).toLocaleDateString()}</p>
+              </div>
+            )}
+
+            {contact.date_reached_out && (
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1">Date reached out</label>
+                <p className="text-sm text-white/80">{new Date(contact.date_reached_out).toLocaleDateString()}</p>
+              </div>
+            )}
+          </div>
+
+          <button onClick={onClose} className="w-full py-2 rounded-lg border border-white/20 text-white hover:bg-white/10 transition-all">
+            Close
+          </button>
         </div>
-        <select
-          value={contact.status}
-          onChange={(e) => onStatusChange(contact.id, e.target.value as Contact['status'])}
-          onClick={(e) => e.stopPropagation()}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium border-0 cursor-pointer bg-white/10 text-white ${statusColors[contact.status]}`}
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value} className="bg-gray-900 text-white">
-              {opt.label}
-            </option>
-          ))}
-        </select>
       </div>
-
-      <div className="flex items-center gap-4 text-sm text-white/60 mb-3">
-        {contact.email && (
-          <a href={`mailto:${contact.email}`} className="hover:text-chromara-pink transition-colors">
-            ✉️ {contact.email}
-          </a>
-        )}
-        {contact.linkedin_url && (
-          <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer" className="hover:text-chromara-purple transition-colors">
-            💼 LinkedIn
-          </a>
-        )}
-      </div>
-
-      {contact.notes && (
-        <p className="text-sm text-white/70 bg-white/5 p-2 rounded-lg">
-          💭 {contact.notes}
-        </p>
-      )}
-
-      {contact.next_followup && (
-        <div className="mt-3 text-sm text-white/60">
-          📅 Next follow-up: {new Date(contact.next_followup).toLocaleDateString()}
-        </div>
-      )}
     </div>
   )
 }
