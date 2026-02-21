@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabase-server'
+import { createServerSupabase, createAdminSupabase } from '@/lib/supabase-server'
 
 const COMPETITOR_URLS = [
   { name: "L'Oréal", url: 'https://www.loreal.com/en/usa/news' },
@@ -25,6 +25,12 @@ export async function POST() {
       })
     }
 
+    let db = supabase
+    try {
+      db = createAdminSupabase()
+    } catch {
+      // Fallback to session client if service role not configured
+    }
     let saved = 0
     for (const { name, url } of COMPETITOR_URLS) {
       try {
@@ -48,7 +54,7 @@ export async function POST() {
         const markdown = data.data?.markdown || ''
         const title = data.data?.metadata?.title || `${name} - scraped`
         const description = markdown.slice(0, 1000).replace(/\n+/g, ' ').trim()
-        await supabase.from('market_intelligence').insert({
+        const { error: insertError } = await db.from('market_intelligence').insert({
           user_id: user.id,
           category: 'competitor_insight',
           title: `${name}: ${title}`,
@@ -57,6 +63,10 @@ export async function POST() {
           data: { markdown_length: markdown.length },
           relevance_score: 7,
         })
+        if (insertError) {
+          console.error(`Insert failed for ${name}:`, insertError)
+          continue
+        }
         saved++
       } catch (err) {
         console.warn(`Scrape error for ${url}:`, err)
